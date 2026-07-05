@@ -1,0 +1,31 @@
+; AAG Phase 1 defaults — EURUSD M5
+; Load via Strategy Tester → Inputs → Load
+
+InpATRPeriod=14
+InpATRMultiplier=1.5
+InpEMAPeriod=50
+InpADXPeriod=14
+InpADXThreshold=20
+InpMaxGridLevels=6
+InpSizingMode=0
+InpFixedLot=0.10
+InpRiskPercent=1.0
+InpMinLot=0.01
+InpMaxLot=5.0
+InpMaxSpreadPips=2.0
+InpSlippagePoints=10
+InpMaxOpenTrades=6
+InpCooldownMinutes=20
+InpEquityFloorPercent=50.0
+InpTradePermission=0
+InpSLTPMode=0
+InpSLATRMult=2.0
+InpTPATRMult=1.5
+InpSLFixedPips=20.0
+InpTPFixedPips=15.0
+InpBasketTPEnabled=true
+InpBasketTPMode=0
+InpBasketTPMoney=50.0
+InpBasketTPPercent=0.5
+InpMagicNumber=20260705
+InpTesterVerbose=true

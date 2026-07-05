@@ -1,0 +1,44 @@
+; AAG_EURUSD_M5_EDGE-401_max1-level
+; E0 finding: D1 +$135 / D2 -$315 — isolate single-leg baskets only
+; Same SL/TP as baseline (2.0 / 1.5 ATR) | max 1 grid level
+; Test: EURUSD M5 | 2026.01.01 – 2026.01.31 | Every Tick | $200
+; Compare vs EDGE-001 baseline
+;
+; === Indicators ===
+InpATRPeriod=14||14||1||140||N
+InpATRMultiplier=1.5||1.5||0.150000||15.000000||N
+InpEMAPeriod=50||50||1||500||N
+InpADXPeriod=14||14||1||140||N
+InpADXThreshold=20||20||1||200||N
+; === Grid ===
+InpMaxGridLevels=1||1||1||10||N
+; === Risk ===
+InpSizingMode=0||0||0||1||N
+InpFixedLot=0.1||0.1||0.010000||1.000000||N
+InpRiskPercent=1.0||1.0||0.100000||10.000000||N
+InpMinLot=0.01||0.01||0.001000||0.100000||N
+InpMaxLot=5.0||5.0||0.500000||50.000000||N
+InpMaxSpreadPips=2.0||2.0||0.200000||20.000000||N
+InpSlippagePoints=10||10||1||100||N
+InpMaxOpenTrades=1||1||1||10||N
+InpCooldownMinutes=20||20||1||200||N
+InpEquityFloorPercent=50.0||50.0||5.000000||500.000000||N
+InpTradePermission=0||0||0||2||N
+; === SL / TP ===
+InpSLTPMode=0||0||0||1||N
+InpSLATRMult=2.0||2.0||0.200000||20.000000||N
+InpTPATRMult=1.5||1.5||0.150000||15.000000||N
+InpSLFixedPips=20.0||20.0||2.000000||200.000000||N
+InpTPFixedPips=15.0||15.0||1.500000||150.000000||N
+; === Basket Exit ===
+InpBasketTPEnabled=true||false||0||true||N
+InpBasketTPMode=0||0||0||1||N
+InpBasketTPMoney=50.0||50.0||5.000000||500.000000||N
+InpBasketTPPercent=0.5||0.5||0.050000||5.000000||N
+; === General ===
+InpMagicNumber=20260705||20260705||1||202607050||N
+InpTesterVerbose=false||false||0||true||N
+; === Diagnostics (Phase E0) ===
+InpDiagnosticsEnabled=true||false||0||true||N
+InpDiagnosticsCSV=true||false||0||true||N
+InpDiagnosticsFilePrefix=AAG_diag_EDGE401

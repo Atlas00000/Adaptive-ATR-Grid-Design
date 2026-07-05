@@ -1,0 +1,66 @@
+; AAG_EURUSD_M5_EDGE-502_basket-tp-20
+; LOCK-202 + E5: basket TP $20
+;
+; === Indicators ===
+InpATRPeriod=14||14||1||140||N
+InpATRMultiplier=1.5||1.5||0.150000||15.000000||N
+InpEMAPeriod=50||50||1||500||N
+InpADXPeriod=14||14||1||140||N
+InpADXThreshold=20||20||1||200||N
+; === Grid ===
+InpMaxGridLevels=6||6||1||60||N
+; === Risk ===
+InpSizingMode=0||0||0||1||N
+InpFixedLot=0.1||0.1||0.010000||1.000000||N
+InpRiskPercent=1.0||1.0||0.100000||10.000000||N
+InpMinLot=0.01||0.01||0.001000||0.100000||N
+InpMaxLot=5.0||5.0||0.500000||50.000000||N
+InpMaxSpreadPips=2.0||2.0||0.200000||20.000000||N
+InpSlippagePoints=10||10||1||100||N
+InpMaxOpenTrades=6||6||1||60||N
+InpCooldownMinutes=20||20||1||200||N
+InpEquityFloorPercent=50.0||50.0||5.000000||500.000000||N
+InpTradePermission=0||0||0||2||N
+; === SL / TP ===
+InpSLTPMode=0||0||0||1||N
+InpSLATRMult=2.0||2.0||0.200000||20.000000||N
+InpTPATRMult=1.5||1.5||0.150000||15.000000||N
+InpSLFixedPips=20.0||20.0||2.000000||200.000000||N
+InpTPFixedPips=15.0||15.0||1.500000||150.000000||N
+; === Basket Exit ===
+InpBasketTPEnabled=true||false||0||true||N
+InpBasketTPMode=0||0||0||1||N
+InpBasketTPMoney=20.0||20.0||2.000000||200.000000||N
+InpBasketTPPercent=0.5||0.5||0.050000||5.000000||N
+; === General ===
+InpMagicNumber=20260705||20260705||1||202607050||N
+InpTesterVerbose=false||false||0||true||N
+; === Session / Time (E1) ===
+InpTimeFilterEnabled=true||false||0||true||N
+InpTradeHourStart=15||15||0||23||N
+InpTradeHourEnd=17||17||0||23||N
+InpUseHourBlacklist=false||false||0||true||N
+InpBlockedHours=9,16,18,19,21,22
+InpDayFilterEnabled=false||false||0||true||N
+InpTradeMon=true||false||0||true||N
+InpTradeTue=true||false||0||true||N
+InpTradeWed=true||false||0||true||N
+InpTradeThu=true||false||0||true||N
+InpTradeFri=true||false||0||true||N
+InpTradeSat=false||false||0||true||N
+InpTradeSun=false||false||0||true||N
+; === Entry Confirmation (E2) ===
+InpEntryFilter=2||2||0||5||N
+InpBBPeriod=20||20||1||200||N
+InpBBDeviation=2.0||2.0||0.200000||20.000000||N
+InpRSIPeriod=14||14||1||140||N
+InpRSIBuyMax=48.0||48.0||4.800000||480.000000||N
+InpRSISellMin=45.0||45.0||4.500000||450.000000||N
+InpHTFTimeframe=15||15||0||49153||N
+InpHTFEMAPeriod=50||50||1||500||N
+InpHTFEMAToleranceMult=0.2||0.2||0.020000||2.000000||N
+InpEMADistanceMult=0.15||0.15||0.015000||1.500000||N
+; === Diagnostics (Phase E0) ===
+InpDiagnosticsEnabled=true||false||0||true||N
+InpDiagnosticsCSV=true||false||0||true||N
+InpDiagnosticsFilePrefix=AAG_diag_EDGE502-20

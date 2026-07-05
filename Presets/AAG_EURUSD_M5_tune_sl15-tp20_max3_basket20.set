@@ -1,0 +1,31 @@
+; EDGE tune — tighter SL, wider TP (test before code)
+; Hypothesis: improve per-leg R:R
+
+InpATRPeriod=14
+InpATRMultiplier=1.5
+InpEMAPeriod=50
+InpADXPeriod=14
+InpADXThreshold=20
+InpMaxGridLevels=3
+InpSizingMode=0
+InpFixedLot=0.08
+InpRiskPercent=1.0
+InpMinLot=0.01
+InpMaxLot=5.0
+InpMaxSpreadPips=2.0
+InpSlippagePoints=10
+InpMaxOpenTrades=3
+InpCooldownMinutes=20
+InpEquityFloorPercent=50.0
+InpTradePermission=0
+InpSLTPMode=0
+InpSLATRMult=1.5
+InpTPATRMult=2.0
+InpSLFixedPips=15.0
+InpTPFixedPips=20.0
+InpBasketTPEnabled=true
+InpBasketTPMode=0
+InpBasketTPMoney=20.0
+InpBasketTPPercent=0.25
+InpMagicNumber=20260705
+InpTesterVerbose=false

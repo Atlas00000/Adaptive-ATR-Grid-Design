@@ -1,0 +1,19 @@
+# Compiled
+*.ex5
+*.ex4
+
+# Logs
+*.log
+
+# MetaTrader local
+*.ini
+
+# Editor / OS
+.DS_Store
+Thumbs.db
+*.swp
+*~
+
+# Cursor workspace artifacts
+.cursor/
+assets/
