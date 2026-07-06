@@ -7,7 +7,7 @@
 | **Programme** | **E10** — Enhance Oscillation |
 | **EA version** | 1.33+ |
 | **Date** | 2026-07-06 |
-| **Related** | [`system-profile.md`](system-profile.md) · [`ai_enhance.md`](ai_enhance.md) · [`aiscaleup.md`](aiscaleup.md) · [`edgeopt.md`](edgeopt.md) · [`Edge Discovery.md`](Edge%20Discovery.md) |
+| **Related** | [`system-profile.md`](system-profile.md) · [`ai_enhance.md`](ai_enhance.md) · [`aiscaleup.md`](aiscaleup.md) · [`edgeopt.md`](edgeopt.md) · [`Edge Discovery.md`](Edge%20Discovery.md) · [`time_profile.md`](time_profile.md) |
 
 ---
 
@@ -411,6 +411,16 @@ Track per phase on **leg** and **basket** separately:
 ## 7. One-liner
 
 **E10 enhances oscillation** by scoring rotation vs trend, then applying **leg-level grid multipliers** (depth, spacing, conditional L0 TP) — building on **LOCK-809** geometry, rejecting basket fantasies, and re-passing **E7″** before live.
+
+---
+
+## 8. Time Profile Reference (demo ops)
+
+For demo forward-testing operations and session-time alignment, use:
+
+- [`time_profile.md`](time_profile.md)
+
+Key rule: keep `15–17` as **server-time** window for LOCK-809 comparability.
 
 ---
 
