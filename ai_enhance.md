@@ -5,8 +5,8 @@
 **Status:** **Production LOCK-202** · **AI stack LOCK-AI locked** (2026-07-06)  
 **Production:** `AAG_EURUSD_M5_production.set` (LOCK-202) — **live chart + max-net reference**  
 **AI stack:** `AAG_EURUSD_M5_AI-803_memory-805p.set` (**LOCK-AI**) — 805p tail guard + memory throttle  
-**Active workstream:** **808 runtime shipped** (v1.32) · **LOCK-AI** canonical · E7 / AI-809 next  
-**Related:** [`edgeopt.md`](edgeopt.md) · [`system-profile.md`](system-profile.md) · [`compo-report.md`](compo-report.md) · [`Edge Discovery.md`](Edge%20Discovery.md)
+**Active workstream:** **E7 complete (FAIL)** · **LOCK-AI** forward test only · **E9** research next  
+**Related:** [`edgeopt.md`](edgeopt.md) · [`system-profile.md`](system-profile.md) · [`compo-report.md`](compo-report.md) · [`aiscaleup.md`](aiscaleup.md) (E9 charter) · [`Edge Discovery.md`](Edge%20Discovery.md)
 
 ---
 
@@ -522,6 +522,7 @@ InpAILotMultMax              = 1.00
 | LOCK-AI v1.32 w01 | 2026-07-06 | — | **1.94** | **65%** | **13%** | **99** | +$246 Jan–Jul25, $200 dep | **Short OK** |
 | LOCK-AI v1.32 w02 | 2026-07-06 | — | **1.33** | **56%** | **74%** | **334** | +$409 Jan25–Jul26, tail −$27.40 ✓ | **Wire OK** |
 | LOCK-AI v1.32 ext22 | 2026-07-06 | — | **1.12** | **52%** | **64%** | **978** | +$508 from 2022, tail **−$64.10** ✗, **$200 dep** | **Regime stress FAIL** |
+| E7 WF+MC | 2026-07-06 | — | — | — | — | — | LOCK-202 11/16 · LOCK-AI 15/28 folds | **E7 FAIL** |
 | AI-810 | 2026-07-05 | **1.74** | — | — | **20.2%** | **241** | causal replay PASS | **Sim fixed** |
 
 ---
@@ -1057,6 +1058,73 @@ Extended 2022 run used **$200** (not $500). Smaller deposit → higher **equity 
 
 ---
 
+## 9.9 E7 walk-forward + Monte Carlo (2026-07-06)
+
+**IDs:** EDGE-702 (walk-forward) · EDGE-703 (Monte Carlo)  
+**Script:** `ML/scripts/e7_validate.py` · **Report:** `ML/features/e7_report.json`
+
+### Method
+
+| Component | Spec |
+|-----------|------|
+| Walk-forward | 3m train / 1m test rolls (`assign_walk_forward`) |
+| Test-fold pass | PF ≥ 1.0, net ≥ $0, trades ≥ 5 |
+| WF gate | ≥ **75%** of test folds pass (≥3/4 when n≥4) |
+| Monte Carlo | 2000 shuffles of basket PnL order; compare actual max DD to p95 |
+| LOCK-202 source | Raw `basket_pnl` from diagnostics exports |
+| LOCK-AI source | `memory_805p` causal replay (`simulate_memory_805p`) |
+
+```bash
+cd ML
+python scripts/build_baskets.py --glob "w02_ext19mo_trades_*.csv" --output features/baskets_w02_ext19mo.parquet
+python scripts/build_baskets.py --glob "w03_longest_trades_*.csv" --output features/baskets_w03_longest.parquet
+python scripts/e7_validate.py --policy all
+```
+
+### Results ($200 deposit)
+
+| Stack | Window | Full net | PF | DD | WF folds | MC p95 DD | Verdict |
+|-------|--------|----------|-----|-----|----------|-----------|---------|
+| **LOCK-202** | w02 wire (19 mo) | +$623 | 1.61 | 28.2% | **11/16 (69%)** | 45.6% | **FAIL** |
+| **LOCK-202** | w03 longest | −$50 | 0.99 | 163% | **22/52 (42%)** | 179.9% | **FAIL** |
+| **LOCK-AI** | AI806_805p | +$416 | 1.27 | 56.2% | **15/28 (54%)** | 60.3% | **FAIL** |
+
+*Note: w02 export aggregates **241 baskets** (leg-sum reconciles +$623); MT5 reports 324 trades — basket vs leg counting. MC actual DD **not worse than p95** on wire window → sequence luck is not the main risk; **regime instability** is.*
+
+### Gate breakdown
+
+| Gate | LOCK-202 w02 | LOCK-202 w03 | LOCK-AI |
+|------|----------------|--------------|---------|
+| WF ≥75% folds | ✗ (69%) | ✗ (42%) | ✗ (54%) |
+| Full net > 0 | ✓ | ✗ | ✓ |
+| PF floor | ✓ (1.61) | ✗ (0.99) | ✓ (1.27) |
+| DD ≤ 25% | ✗ (28.2%) | ✗ | n/a |
+| Tail < −$35 | ✗ (−$25) | ✓ | ✓ (−$23) |
+| MC worse than p95 | ✗ | ✗ | ✗ |
+
+### Weak folds (pattern)
+
+| Period | LOCK-202 | LOCK-AI |
+|--------|----------|---------|
+| 2022 H1 | Heavy fail cluster | n/a (data starts 2024) |
+| 2024 H1 | Apr–Jul bleed | Apr–Jul bleed |
+| 2025 Nov–Dec | Fail | Mixed |
+| 2026 Jul | Fail (n=2–3 baskets) | Fail (n=2) |
+
+**2024 H1** is the shared OOS failure pocket — aligns with ext22 tail break and E9 retrain target.
+
+### Verdict — **E7 FAIL · NOT LIVE-READY**
+
+| Deployment | Status |
+|------------|--------|
+| **LOCK-202 production** | Paper only — WF 69% on wire window, DD 28% > 25% gate |
+| **LOCK-AI forward test** | OK for 2025+ demo — full-window gates pass, WF 54% fails |
+| **Live trading** | **Blocked** until WF ≥75% on wire window + DD gate |
+
+**Next:** E9 basket intelligence + grid geometry on 2024 H1 stress; optional re-export w02 with full 324-basket reconcile.
+
+---
+
 **Edge discovery is done.** Phase **E8** adds a **retrainable AI supervisor** that:
 
 1. **Protects** LOCK-202 in bad regimes via **low-threshold** graded responses  
@@ -1066,7 +1134,7 @@ Extended 2022 run used **$200** (not $500). Smaller deposit → higher **equity 
 
 **First code:** AI-800 stub + AI-801 diagnostics export. **First wire:** AI-803 performance memory. **Highest impact ML:** AI-805 basket health.
 
-**Wire status:** **Production LOCK-202** · **LOCK-AI locked** · **808 runtime v1.32** · **804/806/807 deferred**.
+**Wire status:** **Production LOCK-202** · **LOCK-AI locked** · **808 runtime v1.32** · **E7 FAIL** · 804/806/807 deferred.
 
 ---
 

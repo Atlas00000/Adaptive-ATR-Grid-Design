@@ -346,17 +346,18 @@ Presets live in `Presets/`; copies for Strategy Tester in `MQL5/Profiles/Tester/
 
 ---
 
-## 11. What remains — Phase E7 + E8 follow-up
+## 11. E7 validation — COMPLETE (FAIL) · E9 next
 
-| Task | ID | Gate |
-|---|---|---|
-| Walk-forward (3m train / 1m test) | EDGE-702 | ≥ 3/4 windows pass |
-| Monte Carlo trade shuffle | EDGE-703 | DD tail risk |
-| Longest-window stress | — | PF ≥ **1.1** |
-| LOCK-AI ext22 tail | — | Largest loss < **−$35** |
-| AI retrain (809) | — | Cover 2022–2024 regimes |
+| Task | ID | Gate | Result (2026-07-06) |
+|---|---|---|---|
+| Walk-forward (3m / 1m) | EDGE-702 | ≥75% folds | **FAIL** — LOCK-202: 11/16 w02, 22/52 w03; LOCK-AI: 15/28 |
+| Monte Carlo shuffle | EDGE-703 | DD tail | **PASS** — actual DD ≤ MC p95 on wire windows |
+| Longest-window stress | — | PF ≥ 1.1 | **FAIL** — w03 PF 0.99 |
+| LOCK-AI ext22 tail | — | < −$35 | **FAIL** — MT5 −$64 |
 
-**Production stack LOCK-202 locked.** **AI stack LOCK-AI locked** for 2025+ forward test. No live until E7 gates pass.
+**Script:** `ML/scripts/e7_validate.py` · See [`ai_enhance.md`](ai_enhance.md) §9.9.
+
+**No live trading.** LOCK-202 paper / LOCK-AI forward test only. **Next: E9** (basket intelligence + grid geometry on 2024 H1 OOS pocket).
 
 ---
 
@@ -393,7 +394,7 @@ Live deployment **not approved** until E7 gates pass. Paper trade production pre
 | AI supervisor (E8) | **LOCK-AI wired** (803+805p); 804/806/807 deferred |
 | ML offline pipeline | **Complete** (AI-801–810, 807 research) |
 | Documentation | **Complete** |
-| Validation (E7) | **Pending** |
+| Validation (E7) | **Complete — FAIL** | WF <75%; longest PF 0.99 |
 | Live readiness | **Not met** |
 
 ---

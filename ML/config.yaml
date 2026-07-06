@@ -22,6 +22,21 @@ walk_forward:
   train_months: 3
   test_months: 1
 
+# E7 validation gates (EDGE-702 walk-forward + EDGE-703 Monte Carlo)
+e7_gates:
+  wf_test_pf_floor: 1.0
+  wf_test_net_min: 0.0
+  wf_test_min_trades: 5
+  wf_min_fold_pass_rate: 0.75          # >= 3/4 test folds
+  mc_iterations: 2000
+  mc_seed: 42
+  longest_pf_floor: 1.1                # LOCK-202 live gate (longest window)
+  lock202_wire_pf_floor: 1.05
+  lock202_wire_dd_max_pct: 25.0        # 19-mo production reference
+  lock_ai_wire_pf_floor: 1.05
+  lock_ai_longest_pf_floor: 1.05
+  tail_loss_usd: -35.0
+
 # Anti-overfilter thresholds (match Utils.mqh / ai_enhance.md)
 thresholds:
   entry_block_floor: 0.12

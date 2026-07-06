@@ -6,7 +6,7 @@
 **EA version:** 1.32  
 **Production preset:** `AAG_EURUSD_M5_production.set` (LOCK-202)  
 **AI stack preset:** `AAG_EURUSD_M5_AI-803_memory-805p.set` (LOCK-AI)  
-**Status:** Discovery + E3–E6 **complete**; E8 AI **LOCK-AI locked** for 2025+ forward test; **not live-ready** on full history without E7 validation.
+**Status:** Discovery + E3–E6 **complete**; E8 **LOCK-AI** locked; **E7 FAIL** — not live-ready.
 
 ---
 
@@ -258,9 +258,9 @@ python scripts/simulate_policy.py --policy memory_805p --window AI806_805p
 | PF ≥ 1.1 | **1.46** ✓ | **1.33** ✓ | 1.12 ✓ |
 | Eq DD < 25% | **23%** ✓ | 74% ✗ | 64% ✗ |
 | Tail < −$35 | ✗ (−$63) | **✓** | ✗ (−$64) |
-| Walk-forward | Not run | — | — |
+| Walk-forward | **FAIL** — 11/16 (w02), 15/28 (LOCK-AI) | — | — |
 
-**Verdict:** **LOCK-202** for max-net paper. **LOCK-AI** for 2025+ forward test / tail research. **No live** until E7.
+**Verdict:** **LOCK-202** for max-net paper. **LOCK-AI** for 2025+ forward test. **No live** — E7 failed (WF + longest PF).
 
 ---
 

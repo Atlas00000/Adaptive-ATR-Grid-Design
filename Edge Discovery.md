@@ -472,15 +472,19 @@ E5 exits (basket TP, trailing)     ← avg loss > avg win; fat tails on longest 
 
 ---
 
-### Phase E7 — Validation — **Before live**
+### Phase E7 — Validation — **COMPLETE (FAIL)**
 
-| ID | Task | When |
+| ID | Task | Result (2026-07-06) |
 |---|---|---|
-| **EDGE-702** | Walk-forward: 3m train / 1m test rolls on LOCK-202 | After E5/E4 winner stacked |
-| **EDGE-703** | Monte Carlo on trade sequence | DD tail risk check |
-| **EDGE-701** | AI regime classifier | Defer — needs labelled bars |
+| **EDGE-702** | Walk-forward: 3m train / 1m test on basket PnL | LOCK-202 w02: **11/16** · w03: **22/52** · LOCK-AI: **15/28** — all **<75%** |
+| **EDGE-703** | Monte Carlo basket-order shuffle (2000 iter) | Actual DD **not worse than p95** on wire windows — sequence risk secondary |
+| **EDGE-701** | AI regime classifier | Defer — AI-806 failed |
+
+**Script:** `ML/scripts/e7_validate.py` · **Report:** `ML/features/e7_report.json`
 
 **Gate to live:** LOCK-202 (+ enhancements) profitable on Jan–Jun **and** longest-window PF ≥ 1.1; max DD < 25% on 19-month run; walk-forward ≥ 3/4 windows pass.
+
+**E7 outcome:** **NOT LIVE-READY.** Wire window profitable but WF **69%** and DD **28.2%** fail gates. Longest PF **0.99**. LOCK-AI full-window OK but WF **54%**. **Next: E9** adaptive research on 2024 H1 OOS pocket.
 
 ---
 

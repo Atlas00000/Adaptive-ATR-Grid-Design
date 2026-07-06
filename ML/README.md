@@ -60,6 +60,14 @@ python scripts/simulate_exit_policy.py --window AI806_805p --policy all
 
 Causal exit overlays on 805p health replay (`exit_replay.py`). **No EA wire** — see [`../ai_enhance.md`](../ai_enhance.md) §9.6.
 
+### E7 walk-forward + Monte Carlo (EDGE-702/703)
+
+```bash
+python scripts/e7_validate.py --policy all
+```
+
+Basket-level WF (3m/1m) + 2000-iter MC shuffle. See [`../ai_enhance.md`](../ai_enhance.md) §9.9.
+
 ### AI-808 model export + runtime
 
 ```bash
