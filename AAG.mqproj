@@ -1,4 +1,4 @@
-﻿{
+{
   "platform"    :"mt5",
   "program_type":"expert",
   "copyright"   :"Copyright 2026, MetaQuotes Ltd.",
@@ -141,6 +141,11 @@
     },
     {
       "path":"Include\\AIModelBundle.mqh",
+      "compile":false,
+      "relative_to_project":true
+    },
+    {
+      "path":"Include\\AIStackRiskModel.mqh",
       "compile":false,
       "relative_to_project":true
     }

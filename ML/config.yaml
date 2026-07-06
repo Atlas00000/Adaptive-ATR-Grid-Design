@@ -174,6 +174,37 @@ e9d_gates:
 e9d_policies:
   promote_candidate: physics_lr_p45   # L0-SL LR gate @ 0.45
 
+# E10c oscillation depth (e10c_depth_by_oscillation.py)
+e10c_gates:
+  net_vs_prod_pct: -0.05               # w02 net >= prod * 0.95 ($591)
+  w03_net_delta_min: 50.0              # improve w03 vs baseline replay by >= $50
+  tail_loss_usd: -35.0
+  max_capped_pct: 55.0                 # bottom+mid tertiles capped < 6 on <=55% baskets
+e10c_policies:
+  promote_candidate: osc_depth_246_soft  # low tertile cap L2 only; mid/high full grid
+
+# E10d oscillation spacing (e10d_spacing_by_oscillation.py)
+e10d_gates:
+  net_vs_prod_pct: -0.05
+  w03_net_delta_min: 50.0
+  tail_loss_usd: -35.0
+e10d_policies:
+  promote_candidate: osc_space_100_100_125  # widen high tertile only
+
+# E10e conditional L0 TP widen (e10e_leg_tp_sweep.py)
+e10e_gates:
+  max_wr_drop_w02_pts: 3.0              # WR drop <= 3 pts on w02
+  net_vs_baseline_pct: 0.0
+e10e_policies:
+  promote_candidate: l0_tp_175_high  # optimistic only; MFE check FAIL — no EA wire
+
+# E10f 2024 H1 pocket model (e10f_pocket_model.py)
+e10f_gates:
+  h1_net_min: -20.0                    # 2024 H1 basket sum on w03
+  w02_regression_max_pct: 0.05         # w02 net regression <= 5%
+e10f_policies:
+  promote_candidate: pocket_cap2_phys_p45
+
 # E9c context-gated geometry (e9c_context_geometry.py)
 e9c_gates:
   net_vs_prod_pct: -0.05               # w02 net >= prod * 0.95 ($591)

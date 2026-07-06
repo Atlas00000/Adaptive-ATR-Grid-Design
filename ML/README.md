@@ -107,6 +107,12 @@ python scripts/e9d_physics_labels.py
 python scripts/e9d_simulate.py
 python scripts/e7_validate.py --policy lock202_physics_p45
 python scripts/e7_validate.py --policy lock_ai_physics_p45
+python scripts/e10a_validate.py   # E10a: LOCK-202 vs LOCK-809 vs LOCK-AI+809
+python scripts/e10b_oscillation_labels.py   # E10b: oscillation score + leg labels
+python scripts/e10c_depth_by_oscillation.py   # E10c: depth x oscillation sweep
+python scripts/e10d_spacing_by_oscillation.py   # E10d: spacing x oscillation sweep
+python scripts/e10e_leg_tp_sweep.py   # E10e: L0 TP widen sweep
+python scripts/e10f_pocket_model.py   # E10f: 2024 H1 pocket model
 python scripts/export_mql_constants.py --model models/stack_risk_v0.joblib --type stack
 ```
 
