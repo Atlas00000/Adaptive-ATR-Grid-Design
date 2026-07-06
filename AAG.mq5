@@ -4,7 +4,7 @@
 //+------------------------------------------------------------------+
 #property copyright "Copyright 2026, AAG"
 #property link      "https://www.mql5.com"
-#property version   "1.32"
+#property version   "1.33"
 #property strict
 
 #include "Include/Utils.mqh"
@@ -42,7 +42,7 @@ CAISupervisor   g_ai;
 int OnInit()
   {
    g_logger.Init("AAG", InpTesterVerbose);
-   g_logger.LogInfo("Init v1.32 symbol=" + _Symbol + " tf=" + EnumToString(_Period));
+   g_logger.LogInfo("Init v1.33 symbol=" + _Symbol + " tf=" + EnumToString(_Period));
 
    g_diag.SetLogger(g_logger);
    g_diag.Init(_Symbol, InpMagicNumber, InpDiagnosticsEnabled,
@@ -122,6 +122,9 @@ int OnInit()
                        " runtime=" + g_ai.RuntimeMode());
    else if(InpAIEnabled)
       g_logger.LogInfo("AI master on — runtime fallback LOCK-202 (" + g_ai.RuntimeMode() + ")");
+   else if(InpAIPhysicsStackEnabled)
+      g_logger.LogInfo("AI-809 physics stack gate — thr=" +
+                       DoubleToString(InpAIPhysicsStackThreshold, 2));
 
    return INIT_SUCCEEDED;
   }
@@ -147,6 +150,25 @@ void OnTradeTransaction(const MqlTradeTransaction &trans,
   {
    g_diag.OnTradeTransaction(trans);
    g_basket.OnTradeTransaction(trans, g_state);
+
+   if(InpAIPhysicsStackEnabled && trans.type == TRADE_TRANSACTION_DEAL_ADD)
+     {
+      double deal_pl = 0.0;
+      double mae_usd = 0.0;
+      double mfe_usd = 0.0;
+      datetime close_time = 0;
+      if(g_basket.PollL0SLPhysicsEvent(deal_pl, mae_usd, mfe_usd, close_time))
+        {
+         double prob = 0.0;
+         if(g_ai.ShouldBlockStackAfterL0SL(deal_pl, mae_usd, mfe_usd,
+                                           g_basket.GetBasketStart(), close_time,
+                                           g_basket.GetBias(), prob))
+            g_basket.SetBlockAddAfterL0SL(true);
+         else if(g_ai.IsInitialized())
+            g_logger.LogInfo("AI-809 physics pass p=" + DoubleToString(prob, 3));
+         g_basket.ClearL0SLPhysicsEvent();
+        }
+     }
   }
 
 //+------------------------------------------------------------------+
@@ -246,6 +268,11 @@ void ProcessGridLevels()
       g_ai.LogBlock(hp.reason);
       return;
      }
+   if(g_basket.IsAddBlockedAfterL0SL())
+     {
+      g_ai.LogBlock("ai_physics_l0_sl_gate");
+      return;
+     }
 
    string reason = "";
    if(!g_risk.CanAddLevel(open_count, max_levels, InpMaxSpreadPips,
@@ -332,6 +359,7 @@ void ProcessSignals()
                                SymbolInfoDouble(_Symbol, SYMBOL_ASK) :
                                SymbolInfoDouble(_Symbol, SYMBOL_BID)),
                             ai_policy.lot_mult);
+      g_ai.OnBasketOpened(g_atr);
      }
   }
 
@@ -357,6 +385,7 @@ void ProcessTradeManagement()
    if(g_state.IsBasketActive())
      {
       g_atr.Update();
+      g_basket.UpdateL0Extremes();
 
       g_basket.GetOpenCount();
       if(g_basket.ProcessPendingSLCascade(g_state))

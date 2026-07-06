@@ -5,7 +5,7 @@
 **Status:** **Production LOCK-202** · **AI stack LOCK-AI locked** (2026-07-06)  
 **Production:** `AAG_EURUSD_M5_production.set` (LOCK-202) — **live chart + max-net reference**  
 **AI stack:** `AAG_EURUSD_M5_AI-803_memory-805p.set` (**LOCK-AI**) — 805p tail guard + memory throttle  
-**Active workstream:** **E7 complete (FAIL)** · **LOCK-AI** forward test only · **E9** research next  
+**Active workstream:** **LOCK-809 promoted (MT5 wire)** · LOCK-202 non-AI · E7′ WF FAIL · **no live**  
 **Related:** [`edgeopt.md`](edgeopt.md) · [`system-profile.md`](system-profile.md) · [`compo-report.md`](compo-report.md) · [`aiscaleup.md`](aiscaleup.md) (E9 charter) · [`Edge Discovery.md`](Edge%20Discovery.md)
 
 ---
@@ -203,7 +203,8 @@ else if rolling_PF > 1.5 AND rolling_WR > 0.68:
 **Thresholds intentionally low** — only activates after **sustained** deterioration, not single loss.
 
 **Preset (LOCK-202 only — wire FAIL):** `AAG_EURUSD_M5_AI-803_memory.set` — archive  
-**Preset (LOCK-AI):** `AAG_EURUSD_M5_AI-803_memory-805p.set` — **canonical AI stack**
+**Preset (LOCK-AI):** `AAG_EURUSD_M5_AI-803_memory-805p.set` — defensive overlay (803+805p)  
+**Preset (LOCK-809):** `AAG_EURUSD_M5_AI-809_physics-p45.set` — **canonical AI** (geometry)
 
 **Lesson:** 803 on LOCK-202 alone → net −$122, DD worse. Retest **stacked on 805p** where tail is already contained.
 
@@ -848,7 +849,7 @@ Re-run **`AI-804_lock-ai.set`** on EA **v1.31**.
 | **Largest loss** | **−$24.64** | **−$44.45** | **FAIL** |
 | Equity DD | ~71% | **66.3%** | improved |
 
-**Verdict:** Keep **804 off** — `InpAIEntryContextEnabled=false`. **LOCK-AI** remains canonical AI stack. Entry lot scaling erodes 805p tail cap on at least one basket; net also worse.
+**Verdict:** Keep **804 off** — `InpAIEntryContextEnabled=false`. **LOCK-809** is canonical AI preset; **LOCK-AI** remains defensive overlay.
 
 **Optional follow-up:** Disable hard block entirely; retrain LR with capped PF in training pipeline; or defer 804 until E7.
 
@@ -1121,21 +1122,310 @@ python scripts/e7_validate.py --policy all
 | **LOCK-AI forward test** | OK for 2025+ demo — full-window gates pass, WF 54% fails |
 | **Live trading** | **Blocked** until WF ≥75% on wire window + DD gate |
 
-**Next:** E9 basket intelligence + grid geometry on 2024 H1 stress; optional re-export w02 with full 324-basket reconcile.
+**Next:** E9b grid geometry offline sim targeting D2+ failure mode.
 
 ---
 
-**Edge discovery is done.** Phase **E8** adds a **retrainable AI supervisor** that:
+## 9.10 E9a basket intelligence (2026-07-06)
 
-1. **Protects** LOCK-202 in bad regimes via **low-threshold** graded responses  
-2. **Preserves** trade volume (≥ 85% floor)  
-3. **Trains offline** with walk-forward discipline before any EA wire  
-4. **Targets** tail loss and DD — not entry replacement  
+**ID:** E9a · **Script:** `ML/scripts/e9a_basket_intelligence.py` · **Report:** `ML/features/e9a_report.json`
 
-**First code:** AI-800 stub + AI-801 diagnostics export. **First wire:** AI-803 performance memory. **Highest impact ML:** AI-805 basket health.
+```bash
+cd ML
+python scripts/e9a_basket_intelligence.py --window all
+```
 
-**Wire status:** **Production LOCK-202** · **LOCK-AI locked** · **808 runtime v1.32** · **E7 FAIL** · 804/806/807 deferred.
+### Method
+
+Basket-level metrics on LOCK-202 (`w03_longest`), LOCK-AI (`AI806_805p`), and wire reference (`w02_ext19mo`):
+
+| Metric | Definition |
+|--------|------------|
+| **Recovery rate** | % underwater baskets (`path_mae < −$1`) that close positive |
+| **Lifetime** | Hold hours (median / p90); % baskets open > 4h |
+| **Capital efficiency** | Mean PnL per level, per hour; exposure efficiency on underwater baskets |
+| **Depth** | D2+ rate, D2+ WR vs L0 WR, SL exit rate |
+
+Segments: **all**, **2024 H1**, **2024 Apr–Jul**, **rest**, **D2+**, **L0 only**.
+
+### Results — primary finding: **L0 carries edge, D2+ destroys it**
+
+| Stack | Segment | Baskets | Net | PF | WR | D2+ WR | SL exit % |
+|-------|---------|---------|-----|-----|-----|--------|-----------|
+| LOCK-202 w03 | **All** | 736 | −$50 | 0.99 | 57% | 21% | 34% |
+| LOCK-202 w03 | **L0 only** | 439 | **+$1,899** | **3.32** | **82%** | — | 19% |
+| LOCK-202 w03 | **D2+** | 297 | **−$1,949** | **0.31** | 21% | 21% | 48% |
+| LOCK-202 w03 | **2024 H1** | 75 | −$144 | 0.71 | 51% | 26% | **41%** |
+| LOCK-202 w03 | Rest | 661 | +$94 | 1.03 | 58% | 20% | 29% |
+| LOCK-AI | **L0 only** | 248 | **+$1,439** | **5.10** | **85%** | — | 15% |
+| LOCK-AI | **D2+** | 147 | **−$986** | **0.32** | 19% | 19% | 17% |
+| LOCK-AI | **2024 H1** | 76 | −$35 | 0.91 | 55% | 17% | 24% |
+
+*w02 wire window (241 baskets, 2025+) has no 2024 H1 data — confirms sweet-spot bias.*
+
+### 2024 H1 stress pocket
+
+| Stack | 2024 H1 net | Apr–Jul net | vs rest WR Δ | vs rest SL exit Δ |
+|-------|-------------|-------------|--------------|-------------------|
+| LOCK-202 | −$144 | −$132 | −7.1 pts | **+12.4 pts** |
+| LOCK-AI | −$35 | −$47 | −6.5 pts | +9.9 pts |
+
+Worst LOCK-202 months: **Jul −$63**, Feb −$46, Nov −$46. LOCK-AI health layer **softens** 2024 H1 (−$35 vs −$144) but **cannot fix D2+ economics** (PF 0.32 on deep stacks).
+
+### Verdict — **E9a PASS (research gate)**
+
+| Question | Answer |
+|----------|--------|
+| How do regimes fail? | **Deep stacks (D2+)** — 40% of baskets, ~100% of longest-window losses |
+| Is it winner clipping? | **No** — L0 WR 82–85%; problem is grid depth / SL cascade on stacked legs |
+| Is 2024 H1 special? | **Yes** — higher SL exit rate (+12 pts), larger avg loss; bleed starts Feb–Mar |
+| What fixes it? | **E9b** — spacing / depth limits / non-linear geometry before signal |
+
+**Next:** E9c — context-gate `no_add_after_l0_sl` so w02 wire net holds.
 
 ---
 
-*AAG AI Enhancement · Phase E8 · 2026-07-06 · LOCK-202 production · LOCK-AI stack · EA v1.32*
+## 9.11 E9b grid geometry offline (2026-07-06)
+
+**ID:** E9b · **Script:** `ML/scripts/e9b_grid_geometry.py` · **Report:** `ML/features/e9b_report.json`
+
+Extends `basket_replay.py` with geometry overlays: `max_grid_levels`, `spacing_mult`, **`no_add_after_l0_sl`** (block L1+ after L0 leg closes at SL).
+
+```bash
+cd ML
+python scripts/e9b_grid_geometry.py --window all
+```
+
+### Policy sweep (causal replay, no health caps)
+
+| Policy | w03 longest | w02 wire (19 mo) | 2024 H1 (w03) | Verdict |
+|--------|-------------|------------------|---------------|---------|
+| **baseline** | −$44 · PF 0.99 | +$656 · PF 1.67 | −$144 | — |
+| cap_l0_only | −$161 | +$331 | — | **Reject** — kills L1 recovery |
+| cap_l2 | = baseline | = baseline | = baseline | **No effect** — no L3+ in data |
+| spacing_125/150 | −$86 / −$78 | −$33 / −$42 | — | **Reject** |
+| stress_flat_−15 | +$38 | **+$725** | — | Helps wire; defensive not geometry |
+| **no_add_after_l0_sl** | **+$321** · PF 1.10 | **+$515** (−$108) | **−$45** (+$99) | **PARTIAL** |
+
+LOCK-AI (`no_add_after_l0_sl`): +$695 (+$241), **2024 H1 +$39** (was −$35).
+
+### Primary finding
+
+D2+ failure is driven by **averaging after L0 SL** — baskets where L0 stops out then L1 opens are net-negative. Blocking further adds after L0 SL is **causal** and fixes the stress pocket, but **clips wire-window edge** (−$108 on w02) because some 2025+ baskets recover via L1 after L0 SL.
+
+Spacing / depth-cap alone do not fix D2+ (max depth in data is **2** only).
+
+### Verdict — **E9b PARTIAL · defer wire**
+
+| Gate | Result |
+|------|--------|
+| Improve w03 net | **PASS** (+$371) |
+| Fix 2024 H1 | **PASS** (−$144 → −$45) |
+| w02 net ≥ prod −5% | **FAIL** (−$108 vs w02) |
+| D2+ PF ≥ 1.0 | **FAIL** (still ~0.35) |
+| Tail < −$35 | **PASS** (worst −$19 w03) |
+
+**Promote to E9c:** `no_add_after_l0_sl` as a **context-gated multiplier** — apply in high-SL regimes (2024 H1 pattern), not globally on 2025+ wire.
+
+---
+
+## 9.12 E9c context-gated geometry (2026-07-06)
+
+**ID:** E9c · **Script:** `ML/scripts/e9c_context_geometry.py` · **Report:** `ML/features/e9c_report.json`
+
+Applies E9b `no_add_after_l0_sl` **only when entry-time context matches** — no skips, same basket count.
+
+```bash
+cd ML
+python scripts/e9c_context_geometry.py
+```
+
+### Combo gate (w02 wire + w03 stress)
+
+| Gate | Requirement |
+|------|-------------|
+| w02 net | ≥ prod −5% (**≥ $591**) |
+| w03 Δnet | ≥ **+$50** vs baseline |
+| w02 gated % | ≤ **55%** |
+| Tail | ≥ **−$35** |
+
+### Results — top passing gates
+
+| Gate | w02 net | w03 Δnet | Gated (w02/w03) | Live-viable? |
+|------|---------|----------|-----------------|--------------|
+| **adx_lt_18** | **$666** | **+$117** | 42% / 45% | **Yes** — entry ADX < 18 |
+| month_stress | $656 | +$153 | 0% / 9% | Weak — month enum only |
+| pre_2025 | $656 | +$363 | 0% / 66% | **No** — calendar lookahead |
+| always_on | $515 | +$371 | 100% | **No** — fails w02 |
+
+### Promote candidate — **`adx_lt_18`**
+
+When **entry ADX < 18** at basket open → apply `no_add_after_l0_sl` (block L1+ after L0 SL).
+
+| Window | Baseline | Gated | Delta |
+|--------|----------|-------|-------|
+| w02 wire | $656 | **$666** | +$43 |
+| w03 longest | −$44 | **+$67** | +$117 |
+| vs prod $623 | — | **+$43** | passes −5% gate |
+
+2024 H1 on w03 still **−$117** (improved from −$144 globally, not fully fixed). Needs E9d physics or stacked gates for OOS pocket.
+
+### Verdict — **E9c PASS (offline research gate)**
+
+| Item | Status |
+|------|--------|
+| Context multiplier (not skip) | **PASS** — geometry only on ~45% of baskets |
+| w02 + w03 combo | **PASS** with `adx_lt_18` |
+| 2024 H1 fully healed | **FAIL** — still negative |
+| MT5 wire | **Deferred** — prove in EA + re-run E7′ |
+
+**EA mapping:** pre-signal rule in `ProcessGridLevels` — if `entry_adx < 18` set `no_add_after_l0_sl` flag on basket context (same as E9b replay). **Next:** E7′ validation before wire.
+
+---
+
+## 9.13 E7′ walk-forward + MC — `adx_lt_18` (2026-07-06)
+
+**ID:** E7′ · **Policy:** `lock202_adx_lt_18` · **Report:** `ML/features/e7_prime_report.json`
+
+```bash
+cd ML
+python scripts/e7_validate.py --policy lock202_adx_lt_18
+```
+
+### vs E7 baseline (LOCK-202 raw baskets)
+
+| Window | Metric | E7 LOCK-202 | E7′ `adx_lt_18` | Δ |
+|--------|--------|-------------|-----------------|---|
+| w02 wire | Net | +$623 | **+$666** | +$43 |
+| w02 wire | PF | 1.61 | **1.69** | +0.08 |
+| w02 wire | DD | 28.2% | **21.6%** | ✓ under 25% |
+| w02 wire | WF folds | **11/16 (69%)** | 10/16 (62%) | −1 fold |
+| w03 longest | Net | −$50 | **+$67** | +$117 |
+| w03 longest | PF | 0.99 | **1.02** | +0.03 |
+| w03 longest | WF folds | 22/52 (42%) | **25/52 (48%)** | +3 folds |
+| w03 longest | DD | 163% | 128% | still fail |
+
+*Gated ~42–45% of baskets (entry ADX < 18). MC actual DD ≤ p95 on both windows.*
+
+### Verdict — **E7′ FAIL · still NOT LIVE-READY**
+
+| Gate | w02 wire | w03 longest |
+|------|----------|-------------|
+| WF ≥75% folds | **FAIL** (62%) | **FAIL** (48%) |
+| Full-window gates | **PASS** (PF, DD, net) | PF 1.02 only |
+| 2024 H1 OOS | — | folds 21–32 mostly FAIL |
+
+Geometry gate **helps net and w02 DD** but **does not clear the WF bar**. 2024 H1 pocket still bleeds in most folds. **No MT5 wire** — superseded by E9d physics gate.
+
+---
+
+## 9.14 E9d physics stack-risk gate (2026-07-06)
+
+**ID:** E9d · **Scripts:** `e9d_physics_labels.py`, `e9d_simulate.py` · **Model:** `models/stack_risk_v0.joblib` · **Report:** `ML/features/e9d_report.json`
+
+Labels at **L0 SL close** (causal): MAE/MFE on L0 path, hold time, ADX/ATR, rolling memory. Target: `label_block_beneficial` = L0-only PnL > full basket PnL when L1+ exists.
+
+```bash
+cd ML
+python scripts/e9d_physics_labels.py
+python scripts/e9d_simulate.py
+python scripts/e7_validate.py --policy lock202_physics_p45 --output features/e7_physics_report.json
+```
+
+### Label stats (410 L0-SL + depth rows)
+
+| Segment | block_beneficial rate | avg recovery_delta |
+|---------|----------------------|-------------------|
+| All | 58.3% | — |
+| **2024 H1** | **73.6%** | +$2.98 |
+
+Train AUC **0.64** (w03) · OOS w02 AUC **0.62**.
+
+### Promote candidate — **`physics_lr_p45`**
+
+Block L1+ after L0 SL only when LR `p(block_beneficial) ≥ 0.45` — fires on **~21–29%** of baskets (vs 45% for `adx_lt_18`).
+
+| Window | `adx_lt_18` | **`physics_lr_p45`** | Δ |
+|--------|-------------|----------------------|---|
+| w02 net | $666 | **$629** | −$37 (still ≥ prod $623) |
+| w02 DD | 21.6% | **18.5%** | ✓ best survivability |
+| w03 net | +$67 | **+$479** | +$412 |
+| w03 DD | 128% | **35.7%** | ✓ major tail fix |
+| **2024 H1** | −$117 | **−$36** | +$81 pocket heal |
+
+### E7′ with `lock202_physics_p45`
+
+| Window | WF folds | Full net | DD | Verdict |
+|--------|----------|----------|-----|---------|
+| w02 wire | 10/16 (**62%**) | +$629 | **18.5%** | FAIL (<75%) |
+| w03 longest | **28/52 (54%)** | +$479 | **35.7%** | FAIL |
+
+2024 H1 folds: **Jan PASS** (+$16), Apr PASS (+$0.70), May PASS (+$23) — pocket partially healed; Feb/Mar/Jul still fail.
+
+### Verdict — **E9d PASS (offline) · E7′ still FAIL**
+
+| Gate | Result |
+|------|--------|
+| E9d combo (w02+w03+h1) | **PASS** (`lr_p45`) |
+| Survivability (DD) | **PASS** w02 18.5%, w03 35.7% |
+| WF ≥75% | **FAIL** — live still blocked |
+| MT5 wire | **Wired v1.33** — `AIStackRiskModel.mqh` · presets **LOCK-809** / **LOCK-AI+809** |
+| Live trading | **Blocked** — E7′ WF < 75% |
+
+**EA mapping:** on L0 SL close, compute physics features → if `p ≥ 0.45`, set basket `no_add_after_l0_sl`. **Not** basket-open ADX gate.
+
+**Promote hierarchy:**
+
+| Layer | Candidate | Role |
+|-------|-----------|------|
+| Geometry | **`physics_lr_p45`** (AI-809) | Block L1+ after L0 SL when stack-risk LR fires |
+| Defensive | **LOCK-AI** (803+805p) | Tail cap / health overlay — forward test only |
+| Production | **LOCK-202** | Max-net paper reference |
+
+Supersedes E9c **`adx_lt_18`** geometry gate (better w03 DD and 2024 H1, lower gated %).
+
+---
+
+## 9.15 AI-809 MT5 wire (2026-07-06)
+
+**ID:** AI-809 · **Model:** `AIStackRiskModel.mqh` (`stack_risk_v0`) · **EA:** v1.33
+
+| Input | Default | Role |
+|-------|---------|------|
+| `InpAIPhysicsStackEnabled` | false | Enable L0-close geometry gate |
+| `InpAIPhysicsStackThreshold` | 0.45 | Block adds when P(block beneficial) ≥ threshold |
+
+**Presets (bundle IDs):**
+
+| File | Bundle |
+|------|--------|
+| `AAG_EURUSD_M5_AI-809_physics-p45.set` | **LOCK-809** — LOCK-202 + geometry |
+| `AAG_EURUSD_M5_LOCK-AI+809_physics-p45.set` | **LOCK-AI+809** — defensive + geometry |
+| `AAG_EURUSD_M5_production.set` | **LOCK-202** |
+| `AAG_EURUSD_M5_AI-803_memory-805p.set` | **LOCK-AI** |
+
+**E7′ stacked offline** (`lock_ai_physics_p45`): WF **57%** (16/28) — still FAIL.
+
+### MT5 wire validation — LOCK-809 ($200, v1.33)
+
+| Window | Net | PF | Eq DD | Largest loss | vs LOCK-202 ($200) |
+|--------|-----|-----|-------|--------------|-------------------|
+| Jan–Jul 2026 | +$318 | 2.28 | 14% | −$15.60 | Sweet spot |
+| Jan 2025–Jul 2026 | +$566 | 1.42 | 70% | −$63.50 | Prod ref +$623 / DD 23% |
+| **Jan 2022–Jul 2026** | **+$509** | **1.11** | 95%* | −$64.10 | **w03 −$50 / PF 0.99** |
+
+\*DD % inflated on $200; absolute tail −$64 matches LOCK-AI ext22 fail. **Capital-efficiency win:** profitable ext22 on **$200** without $500 deposit upsize.
+
+### Deployment (post-wire)
+
+| Preset | Bundle | Use |
+|--------|--------|-----|
+| `AAG_EURUSD_M5_production.set` | **LOCK-202** | Non-AI — max net wire reference |
+| **`AAG_EURUSD_M5_AI-809_physics-p45.set`** | **LOCK-809** | **Canonical AI** — $200 all windows |
+| `AAG_EURUSD_M5_AI-803_memory-805p.set` | LOCK-AI | Defensive tail-cap overlay (2025+) |
+
+**Wire status:** **LOCK-809 promoted (AI geometry)** · E7′ WF FAIL · **no live** · LOCK-202 non-AI paper · LOCK-809 AI forward test.
+
+---
+
+*AAG AI Enhancement · Phase E8/E9 · 2026-07-06 · LOCK-202 non-AI · LOCK-809 AI canonical · EA v1.33*

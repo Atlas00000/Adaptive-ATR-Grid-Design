@@ -383,7 +383,7 @@ The rating table in this document is accepted as fair. **Long-term robustness** 
 | **Replace all binary with 0–100 scores** | Cosmetic unless execution changes; E8 already uses continuous health (0–100) and entry p_win | AI-805 rule health wired; 804 LR deferred |
 | **Dynamic per-leg capital allocation** | EDGE-404 scaled lots failed (−$58 net) | E4 grid/risk log |
 | **Context enum (8+ hand-built states)** | 806 regime LR never fired at 0.85; labels must come from **data**, not hand-built enums | AI-806 deferred |
-| **Wire adaptive engine before E7** | OOS validation not yet run | EDGE-702/703 pending |
+| **Wire adaptive engine before E7 re-pass** | E7 ran — **FAIL**; MC shows sequence luck is not the issue | EDGE-702/703: WF 69%/42%/54%; 2024 H1 shared bleed |
 
 **Distinction we will enforce:** E3/E6 failed because they **blocked trades**. E9 must **reshape parameters continuously** while preserving ≥85% trade volume vs LOCK-202.
 
@@ -397,8 +397,9 @@ LOCK-202 SignalEngine          ← unchanged (15–17, RSI, ADX, 6-level grid)
 AIModelRuntime (808)           ← version gate, embedded LR, optional ONNX, LOCK-202 fallback
         ↓
 AISupervisor
-    ├── AI-803 memory          ← WIRED (lot throttle after bad rolling PF)
-    ├── AI-805p health         ← WIRED (SL cascade, hard caps, stress flatten)
+    ├── AI-809 physics         ← WIRED (L0-SL stack-risk geometry — canonical AI)
+    ├── AI-803 memory          ← WIRED (lot throttle — LOCK-AI overlay)
+    ├── AI-805p health         ← WIRED (SL cascade — LOCK-AI overlay)
     ├── AI-804 entry           ← DEFERRED (tail fail long window)
     ├── AI-806 regime          ← DEFERRED (no MT5 benefit)
     └── AI-807 exit            ← RESEARCH DEFER (clips winners)
@@ -406,26 +407,43 @@ AISupervisor
 RiskManager / BasketManager / GridEngine / TradeManager
 ```
 
-| Preset | Role |
-|--------|------|
-| `AAG_EURUSD_M5_production.set` (**LOCK-202**) | Live / max-net reference — PF 1.46, DD 23% (19 mo) |
-| `AAG_EURUSD_M5_AI-803_memory-805p.set` (**LOCK-AI**) | Demo / forward test — tail −$27 on 2025+ wire window |
+| Preset | Bundle | Role |
+|--------|--------|------|
+| `AAG_EURUSD_M5_production.set` | **LOCK-202** | Non-AI — max net wire reference (PF 1.46, DD 23%) |
+| `AAG_EURUSD_M5_AI-809_physics-p45.set` | **LOCK-809** | **Canonical AI** — $200 all windows |
+| `AAG_EURUSD_M5_AI-803_memory-805p.set` | **LOCK-AI** | Defensive tail-cap overlay |
+| `AAG_EURUSD_M5_LOCK-AI+809_physics-p45.set` | **LOCK-AI+809** | Stacked research |
 
 ---
 
 ## Reprioritised roadmap (project view)
 
-Reconciles this document's roadmap with test history and current gates.
+Reconciles this document's roadmap with E7 results (2026-07-06), test history, and current gates.
 
-| Priority | ID | Module | Impact | Gate before wire |
-|----------|-----|--------|--------|------------------|
-| **1** | **E7** | Walk-forward + Monte Carlo (LOCK-202 + LOCK-AI) | Validation | **DONE — FAIL** |
-| **2** | **E9a** | Basket intelligence metrics + replay | High | Offline on AI806_805p + ext22 |
-| **3** | **E9b** | Grid geometry engine (non-linear spacing) | Very high | Causal replay; tail −$35 on ext22 |
-| **4** | **E9c** | Context → parameter **multipliers** (one dim at a time) | High | Trades ≥85%; net ≥ prod −5% |
-| **5** | **E9d** | Physics forecast models (MAE, recovery, depth) | High | Replace 804/806 win-loss heads |
-| **Defer** | — | Full 4-regime parameter table | — | After E9c proves one dimension |
-| **Defer** | — | Per-leg basket budget allocation | — | E4 scaled-lots precedent |
+### E7 baseline — why we're here
+
+| Finding | Implication |
+|---------|-------------|
+| WF **69%** (LOCK-202 wire), **54%** (LOCK-AI) — gate is **≥75%** | Profitable full windows mask **unstable OOS months** |
+| MC actual DD **≤ p95** on wire windows | Failure is **regime instability**, not trade-order luck |
+| Shared weak pocket: **2024 H1** (Apr–Jul bleed) | E9 must prove fixes on **2022+ stress**, not 2025-only sweet spot |
+| LOCK-AI caps tail on 2025+ but **WR collapses** on 2022+ | Defensive AI (803/805) **limits damage**; does not **reshape** for bad regimes |
+| Longest window PF **0.99** (LOCK-202 w03) | Fixed LOCK-202 grid is a **local optimum** — needs adaptive execution |
+
+**Blocked until E7 re-pass:** live trading, adaptive-engine MT5 wire, promotion of 804/806/807.
+
+| Priority | ID | Module | Status | Impact | Gate before wire |
+|----------|-----|--------|--------|--------|------------------|
+| — | **E7** | Walk-forward + Monte Carlo | **DONE — FAIL** | Validation baseline | `e7_validate.py` · `ai_enhance.md` §9.9 |
+| **1** | **E9a** | Basket intelligence metrics + replay | **DONE** | High — diagnose *how* regimes fail | `e9a_basket_intelligence.py` · D2+ = failure mode |
+| **2** | **E9b** | Grid geometry engine (non-linear spacing, depth limits) | **DONE — PARTIAL** | Very high — deep-stack tails | `no_add_after_l0_sl` +$371 w03 / **−$108 w02** → E9c gate |
+| **3** | **E9c** | Context → parameter **multipliers** (one dim at a time) | **DONE — PASS** | High — when to apply geometry | Superseded by E9d **`physics_lr_p45`** |
+| **4** | **E9d** | Physics forecast models (MAE, recovery, depth) | **DONE — PASS** | High — L0-SL LR @ p45 | 2024 H1 **−$36** · w03 DD **35.7%** · **`physics_lr_p45` promoted** |
+| **5** | **E7′** | Re-run WF+MC on E9 policy | **DONE — FAIL** | **Live gate** | `lock202_physics_p45` WF 62%/54%; DD gates pass |
+| **6** | **AI-809 wire** | MT5 L0-close physics gate | **DONE — v1.33** | Wire validation | Presets **LOCK-809** / **LOCK-AI+809** · E7 still blocks live |
+| **Defer** | — | Full 4-regime parameter table | — | — | After E9c proves one multiplier dimension |
+| **Defer** | — | Per-leg basket budget allocation | — | — | E4 scaled-lots precedent (−$58) |
+| **Defer** | — | AI-804 entry skip / AI-806 regime skip / AI-807 exit clip | — | — | E7/E8 evidence: blocks or clips hurt net |
 
 ### E9 design rule (from this review)
 
@@ -435,7 +453,30 @@ Context Engine  →  Parameter Multipliers  →  LOCK-202 SignalEngine  →  AIS
               NOT: Context → Skip / Block
 ```
 
-**Multiplier outputs (candidate):** `spacing_mult`, `max_levels`, `rsi_band_width`, `tp_atr_mult`, `cooldown_mult`, `lot_mult` — same surface as E8 `AIPolicy`, but driven by **pre-signal context** instead of post-hoc health.
+**Multiplier outputs (candidate):** `spacing_mult`, `max_levels`, `rsi_band_width`, `tp_atr_mult`, `cooldown_mult`, `lot_mult` — same surface as E8 `AIPolicy`, but driven by **pre-signal context** instead of post-hoc health. E9c proves **one multiplier at a time** on `basket_replay.py` before any EA wire.
+
+### Deployment posture (MT5 wire validated 2026-07-06)
+
+| Stack | Preset | Role | Deposit |
+|-------|--------|------|---------|
+| **LOCK-202** | `production.set` | **Non-AI reference** — max net on wire window | Paper; **$500** historically needed for longest stress |
+| **LOCK-809** | `AI-809_physics-p45.set` | **Canonical AI preset** — geometry on $200 across windows | Paper / forward test |
+| **LOCK-AI** | `AI-803_memory-805p.set` | Defensive overlay (tail cap on wire) | Forward test 2025+ |
+| **LOCK-AI+809** | `LOCK-AI+809_physics-p45.set` | Stacked research | Wire validation only |
+
+**E7′ WF still FAIL** — no live trading. LOCK-809 promoted as **AI geometry winner** from MT5 wire, not E7 clearance.
+
+### MT5 wire — LOCK-809 (`$200`, EURUSD M5, v1.33)
+
+| Window | Net | PF | WR | Trades | Eq DD | Largest loss |
+|--------|-----|-----|-----|--------|-------|--------------|
+| Jan–Jul 2026 | +$318 | **2.28** | 72% | 98 | **14%** | −$15.60 |
+| Jan 2025–Jul 2026 | +$566 | 1.42 | 65% | 329 | 70% | −$63.50 |
+| **Jan 2022–Jul 2026** | **+$509** | **1.11** | 59% | 959 | 95%* | −$64.10 |
+
+\*High **DD %** on $200 is expected on ext22; same absolute tail as LOCK-AI ext22. **LOCK-202 w03 at $200** was **−$50 / PF 0.99** on comparable longest window — LOCK-809 is **+$509 profitable on the same deposit**.
+
+**Read:** One toggle (`InpAIPhysicsStackEnabled`), no 803/805 complexity — matches LOCK-AI ext22 net (**+$508**) with simpler stack. Wire window net slightly below LOCK-202 (+$566 vs +$623) but runnable on **$200** without upsizing deposit.
 
 ---
 
@@ -454,8 +495,8 @@ Context Engine  →  Parameter Multipliers  →  LOCK-202 SignalEngine  →  AIS
 
 ## One-liner (project position)
 
-**Accept the scale-up direction** — move from defensive AI (stop/throttle) to **adaptive execution** (reshape grid, spacing, depth from basket/context intelligence) — but **build it on `basket_replay.py`, prove it on 2022+ stress offline, and pass E7 before any MT5 wire**; LOCK-202 stays production, LOCK-AI stays 2025+ forward test.
+**Geometry `physics_lr_p45` promoted as LOCK-809** — MT5 wire winner on **$200 ext22** (+$509 vs LOCK-202 −$50); LOCK-202 stays non-AI wire reference; **no live** until E7′ WF pass.
 
 ---
 
-*AAG scale-up review · Project response · 2026-07-06 · EA v1.32 · LOCK-202 production · LOCK-AI forward test*
+*AAG scale-up review · 2026-07-06 · LOCK-809 AI canonical · LOCK-202 non-AI · EA v1.33*

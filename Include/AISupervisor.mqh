@@ -9,6 +9,7 @@
 #include "AIHealthModel.mqh"
 #include "AIRegimeModel.mqh"
 #include "AIEntryContextModel.mqh"
+#include "AIStackRiskModel.mqh"
 
 #include "AIModelRuntime.mqh"
 
@@ -90,6 +91,43 @@ private:
       return hour == 9 || hour == 16 ||
              hour == 18 || hour == 19 ||
              hour == 21 || hour == 22;
+     }
+
+   static bool       IsSessionLondon(const int hour)
+     {
+      return hour >= 8 && hour < 16;
+     }
+
+   static bool       IsSessionNY(const int hour)
+     {
+      return hour >= 16 && hour < 22;
+     }
+
+   void              RecordBasketPnl(const double basket_pnl)
+     {
+      if(m_basket_count < AI_MEMORY_WINDOW)
+        {
+         ArrayResize(m_basket_pnls, m_basket_count + 1);
+         m_basket_pnls[m_basket_count] = basket_pnl;
+         m_basket_count++;
+        }
+      else
+        {
+         for(int i = 0; i < AI_MEMORY_WINDOW - 1; i++)
+            m_basket_pnls[i] = m_basket_pnls[i + 1];
+         m_basket_pnls[AI_MEMORY_WINDOW - 1] = basket_pnl;
+         m_basket_count = AI_MEMORY_WINDOW;
+        }
+
+      if(basket_pnl < 0.0)
+        {
+         m_loss_count++;
+         const double abs_loss = MathAbs(basket_pnl);
+         if(m_loss_count == 1)
+            m_historical_avg_loss = abs_loss;
+         else
+            m_historical_avg_loss += (abs_loss - m_historical_avg_loss) / (double)m_loss_count;
+        }
      }
 
    int               ConsecutiveLosses() const
@@ -625,6 +663,10 @@ public:
         }
       m_initialized = true;
 
+      if(m_log != NULL && InpAIPhysicsStackEnabled && !MasterEnabled())
+         m_log.LogInfo("AI-809 physics stack gate — model=" + AI_STACK_RISK_MODEL_VERSION +
+                       " thr=" + DoubleToString(InpAIPhysicsStackThreshold, 2));
+
       if(m_log != NULL && MasterEnabled())
         {
          if(InpAIMemoryEnabled)
@@ -672,6 +714,8 @@ public:
 
    bool              IsActive() const
      {
+      if(InpAIPhysicsStackEnabled)
+         return true;
       if(!MasterEnabled())
          return false;
       return InpAIMemoryEnabled || InpAIEntryContextEnabled ||
@@ -855,6 +899,59 @@ public:
       m_last_health_check = TimeCurrent();
      }
 
+   void              OnBasketOpened(CATREngine &atr_engine)
+     {
+      if(!InpAIPhysicsStackEnabled && !InpAIBasketHealthEnabled)
+         return;
+      m_basket_adx0 = atr_engine.GetADX();
+      m_basket_atr0 = atr_engine.GetATR();
+     }
+
+   bool              ShouldBlockStackAfterL0SL(const double l0_loss_usd,
+                                               const double l0_mae_usd,
+                                               const double l0_mfe_usd,
+                                               const datetime basket_start,
+                                               const datetime l0_close_time,
+                                               const ENUM_TRADE_BIAS bias,
+                                               double &prob_out) const
+     {
+      prob_out = 0.0;
+      if(!InpAIPhysicsStackEnabled)
+         return false;
+
+      const double entry_adx = (m_basket_adx0 > 0.0) ? m_basket_adx0 : 18.0;
+      const double entry_atr = (m_basket_atr0 > 0.0) ? m_basket_atr0 : 0.0006;
+      const double atr_pips = entry_atr * 10000.0;
+      const double hold_hours = (basket_start > 0 && l0_close_time > basket_start) ?
+                                (double)(l0_close_time - basket_start) / 3600.0 : 0.4;
+
+      MqlDateTime dt;
+      TimeToStruct(l0_close_time, dt);
+
+      double f[AI_STACK_RISK_FEATURE_COUNT];
+      f[AIStack_ENTRY_ADX] = entry_adx;
+      f[AIStack_ENTRY_ATR] = entry_atr;
+      f[AIStack_ATR_PIPS] = atr_pips;
+      f[AIStack_L0_HOLD_HOURS] = hold_hours;
+      f[AIStack_L0_LOSS_USD] = l0_loss_usd;
+      f[AIStack_L0_MAE_USD] = l0_mae_usd;
+      f[AIStack_L0_MFE_USD] = l0_mfe_usd;
+      f[AIStack_L0_MAE_ATR] = MathAbs(MathMin(l0_mae_usd, 0.0)) /
+                              MathMax(atr_pips * 0.1, 0.01);
+      f[AIStack_HOUR] = (double)dt.hour;
+      f[AIStack_WEEKDAY] = (double)WeekdayPandas(dt);
+      f[AIStack_BAD_HOUR] = IsBadHourEntry(dt.hour) ? 1.0 : 0.0;
+      f[AIStack_BIAS_SELL] = (bias == BIAS_SELL) ? 1.0 : 0.0;
+      f[AIStack_SESSION_LONDON] = IsSessionLondon(dt.hour) ? 1.0 : 0.0;
+      f[AIStack_SESSION_NY] = IsSessionNY(dt.hour) ? 1.0 : 0.0;
+      f[AIStack_ROLLING_PF_20] = EntryRollingPf20();
+      f[AIStack_ROLLING_WR_20] = EntryRollingWr20();
+      f[AIStack_CONSEC_LOSSES] = (double)ConsecutiveLosses();
+
+      prob_out = AIStackRiskBlockProb(f);
+      return prob_out >= InpAIPhysicsStackThreshold;
+     }
+
    void              OnBasketClosed(const double basket_pnl)
      {
       m_basket_adx0 = 0.0;
@@ -862,34 +959,13 @@ public:
       m_health_trim_done = false;
       m_last_health_check = 0;
 
-      if(!MasterEnabled() || !InpAIMemoryEnabled)
-         return;
+      const bool track_memory = MasterEnabled() && InpAIMemoryEnabled;
+      const bool track_physics = InpAIPhysicsStackEnabled;
+      if(track_memory || track_physics)
+         RecordBasketPnl(basket_pnl);
 
-      if(m_basket_count < AI_MEMORY_WINDOW)
-        {
-         ArrayResize(m_basket_pnls, m_basket_count + 1);
-         m_basket_pnls[m_basket_count] = basket_pnl;
-         m_basket_count++;
-        }
-      else
-        {
-         for(int i = 0; i < AI_MEMORY_WINDOW - 1; i++)
-            m_basket_pnls[i] = m_basket_pnls[i + 1];
-         m_basket_pnls[AI_MEMORY_WINDOW - 1] = basket_pnl;
-         m_basket_count = AI_MEMORY_WINDOW;
-        }
-
-      if(basket_pnl < 0.0)
-        {
-         m_loss_count++;
-         const double abs_loss = MathAbs(basket_pnl);
-         if(m_loss_count == 1)
-            m_historical_avg_loss = abs_loss;
-         else
-            m_historical_avg_loss += (abs_loss - m_historical_avg_loss) / (double)m_loss_count;
-        }
-
-      UpdateMemoryState();
+      if(track_memory)
+         UpdateMemoryState();
      }
 
    void              LogBlock(const string reason) const

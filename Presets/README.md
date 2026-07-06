@@ -120,9 +120,11 @@ After editing presets in `Presets/`, copy to `Profiles/Tester/` (or run full syn
 
 | Preset | Role |
 |--------|------|
-| **`AAG_EURUSD_M5_production.set`** | **Production LOCK-202** — live chart + max-net reference |
-| **`AAG_EURUSD_M5_AI-803_memory-805p.set`** | **AI stack LOCK-AI** — demo / forward test |
-| `AAG_EURUSD_M5_AI-804_lock-ai.set` | **P4 active** — LOCK-AI + entry context (wire test) |
+| **`AAG_EURUSD_M5_production.set`** | **LOCK-202** — non-AI wire reference |
+| **`AAG_EURUSD_M5_AI-809_physics-p45.set`** | **LOCK-809** — **canonical AI** ($200 all windows) |
+| **`AAG_EURUSD_M5_AI-803_memory-805p.set`** | **LOCK-AI** — defensive tail-cap overlay |
+| **`AAG_EURUSD_M5_LOCK-AI+809_physics-p45.set`** | **LOCK-AI+809** — stacked wire validation |
+| `AAG_EURUSD_M5_AI-804_lock-ai.set` | **LOCK-AI+804** — entry context (deferred) |
 | `AAG_EURUSD_M5_AI-805_basket-health.set` | LOCK-805p — health building block inside LOCK-AI |
 | `AAG_EURUSD_M5_AI-806_diagnostics-prod.set` | Regime labelling — production + CSV (`AAG_diag_AI806_prod_*`) |
 | `AAG_EURUSD_M5_AI-806_diagnostics-805.set` | Regime labelling — 805p + CSV (`AAG_diag_AI806_805p_*`) |
@@ -135,4 +137,4 @@ After editing presets in `Presets/`, copy to `Profiles/Tester/` (or run full syn
 | `AAG_EURUSD_M5_AI-800_stub.set` | AI infra stub |
 | `AAG_EURUSD_M5_EDGE-001_diagnostics.set` | E0 trade journal (legacy prefix) |
 
-See [`ai_enhance.md`](../ai_enhance.md) §9.1 (LOCK-805p), §9.4 (LOCK-AI), §9.2 (806 deferred).
+See [`ai_enhance.md`](../ai_enhance.md) §9.1 (LOCK-805p), §9.4 (LOCK-AI), §9.14–§9.15 (AI-809 physics).

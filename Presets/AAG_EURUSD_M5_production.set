@@ -1,5 +1,7 @@
 ; AAG_EURUSD_M5_production
-; PRODUCTION — winning stack (= EDGE-LOCK-202 v2)
+; LOCK-202 — NON-AI PRODUCTION REFERENCE (= EDGE-LOCK-202 v2)
+; Bundle ID: LOCK-202 | Max net wire window; use $500 for longest stress tests
+; AI preset = AAG_EURUSD_M5_AI-809_physics-p45.set (LOCK-809)
 ; Session 15–17 + RSI rotation | SL 2×ATR / TP 1.5×ATR | grid 6 | basket TP $50
 ; Jan–Jul 2025: +$273 | PF 1.93 | WR 72% | DD 12% | 96 trades
 ; Jan 25–Jul 26: +$623 | PF 1.46 | WR 66% | DD 23%

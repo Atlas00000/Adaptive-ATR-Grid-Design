@@ -1,12 +1,9 @@
-; AAG_EURUSD_M5_AI-803_memory-805p
-; LOCK-AI — canonical defensive AI stack · EA v1.33+
-; Bundle ID: LOCK-AI | File maps to AI-803 + AI-805p layers
-; Production = AAG_EURUSD_M5_production.set (LOCK-202) — unchanged
-; Stack: LOCK-805p basket health + AI-803 performance memory
-; Wire: +$469 / DD 58.5% | Long Jan24-Jul26: +$442 / PF 1.25 / tail -24.64
-; Offline: simulate_policy.py --policy memory_805p --window AI806_805p
-; Tester: EURUSD M5 | 2025.01.01–2026.07.31 | deposit $200
-; Copy to: MQL5\Profiles\Tester\ (Strategy Tester loads from there)
+; AAG_EURUSD_M5_LOCK-AI+809_physics-p45
+; LOCK-AI+809 — defensive (803+805p) + E9d geometry · EA v1.33+
+; Bundle ID: LOCK-AI+809 | Geometry: physics_lr_p45 | Defensive: LOCK-AI
+; E7′ stacked offline pending — wire validation / forward test only
+; Offline: e7_validate.py --policy lock_ai_physics_p45
+; Tester: EURUSD M5 | deposit $200 | Copy to MQL5\Profiles\Tester\
 ;
 ; === Indicators ===
 InpATRPeriod=14||14||1||140||N
@@ -84,9 +81,9 @@ InpStructLiqSweepUsePD=false||false||0||true||N
 InpStructLiqSweepMinATR=0.05||0.05||0.005000||0.500000||N
 InpStructRangeMidAnchorEnabled=false||false||0||true||N
 InpStructRangeMidSource=0||0||0||1||N
-; === AI Supervisor (E8) — LOCK-805p + AI-803 memory ===
+; === AI — LOCK-AI + AI-809 geometry ===
 InpAIEnabled=true||false||0||true||N
-InpAIModelVersion=LOCK-AI||N
+InpAIModelVersion=LOCK-AI+809||N
 InpAIMemoryEnabled=true||false||0||true||N
 InpAIEntryContextEnabled=false||false||0||true||N
 InpAIBasketHealthEnabled=true||false||0||true||N
@@ -109,14 +106,15 @@ InpAIHealthSLCascadeStackUSD=-28.0||-28.0||-2.800000||-280.000000||N
 InpAIHealthSLCascadeFloatUSD=-8.0||-8.0||-0.800000||-80.000000||N
 InpAIHealthSLCascadeUseFloat=false||false||0||true||N
 InpAIRegimeEnabled=false||false||0||true||N
+InpAIPhysicsStackEnabled=true||false||0||true||N
+InpAIPhysicsStackThreshold=0.45||0.45||0.045000||4.500000||N
 InpAIEntryBlockFloor=0.12||0.12||0.012000||1.200000||N
 InpAIHealthNoAddThreshold=55.0||55.0||5.500000||550.000000||N
 InpAIHealthFlattenThreshold=88.0||88.0||8.800000||880.000000||N
-InpAIRegimeTrendSkipProb=0.85||0.85||0.085000||8.500000||N
 InpAILotMultMin=0.65||0.65||0.065000||6.500000||N
 InpAILotMultMax=1.0||1.0||0.100000||10.000000||N
 ; === General ===
-InpMagicNumber=20260705||20260705||1||202607050||N
+InpMagicNumber=20260706||20260706||1||202607060||N
 InpTesterVerbose=false||false||0||true||N
 ; === Session / Time (E1) ===
 InpTimeFilterEnabled=true||false||0||true||N
@@ -143,7 +141,7 @@ InpHTFTimeframe=15||15||0||49153||N
 InpHTFEMAPeriod=50||50||1||500||N
 InpHTFEMAToleranceMult=0.2||0.2||0.020000||2.000000||N
 InpEMADistanceMult=0.15||0.15||0.015000||1.500000||N
-; === Diagnostics (off for wire test) ===
+; === Diagnostics ===
 InpDiagnosticsEnabled=false||false||0||true||N
 InpDiagnosticsCSV=false||false||0||true||N
-InpDiagnosticsFilePrefix=AAG_diag_production
+InpDiagnosticsFilePrefix=AAG_diag_LOCKAI809_physics

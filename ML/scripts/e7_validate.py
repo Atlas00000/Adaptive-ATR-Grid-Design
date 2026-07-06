@@ -16,10 +16,22 @@ from analyze_expectancy import load_baskets
 from build_features import assign_walk_forward
 from simulate_policy import (
     equity_metrics,
+    health_805p_kwargs,
+    simulate_memory,
     simulate_memory_805p,
 )
+from e9c_context_geometry import build_gates, enrich_baskets, simulate_gated
+from basket_replay import load_window_legs, replay_basket
+from e9d_simulate import make_model_gate, meta_lookup_for_windows, simulate_physics
 
-POLICIES = ("lock202", "lock_ai")
+POLICIES = (
+    "lock202",
+    "lock_ai",
+    "lock202_adx_lt_18",
+    "lock202_physics_p45",
+    "lock_ai_physics_p45",
+)
+E9C_GEOMETRY = {"no_add_after_l0_sl": True}
 
 
 def policy_pnls(
@@ -48,6 +60,84 @@ def policy_pnls(
         sim_df["pnl"] = sim_df["sim_pnl"].astype(float)
         sim_df["policy"] = "lock_ai"
         return sim_df
+
+    if policy == "lock202_adx_lt_18":
+        gate_fn = build_gates()["adx_lt_18"]
+        enriched = enrich_baskets(df)
+        legs = load_window_legs(export_dir, window)
+        sim = simulate_gated(legs, enriched, gate_fn, E9C_GEOMETRY, cfg)
+        pnl_map = dict(zip(sim["basket_key"].astype(str), sim["sim_pnl"]))
+        out = enriched.copy()
+        out["pnl"] = out["basket_key"].astype(str).map(pnl_map).astype(float)
+        out["policy"] = policy
+        out["geometry_gated"] = out["basket_key"].astype(str).isin(
+            sim.loc[sim["gated"], "basket_key"].astype(str)
+        )
+        return out
+
+    if policy == "lock202_physics_p45":
+        import joblib
+
+        model_path = ROOT / "models" / "stack_risk_v0.joblib"
+        if not model_path.is_file():
+            raise FileNotFoundError(f"Train E9d first: {model_path}")
+        model = joblib.load(model_path)
+        meta = meta_lookup_for_windows(export_dir, window)
+        gate_fn = make_model_gate(model, 0.45, meta)
+        enriched = enrich_baskets(df)
+        legs = load_window_legs(export_dir, window)
+        sim = simulate_physics(legs, enriched, gate_fn, cfg)
+        pnl_map = dict(zip(sim["basket_key"].astype(str), sim["sim_pnl"]))
+        out = enriched.copy()
+        out["pnl"] = out["basket_key"].astype(str).map(pnl_map).astype(float)
+        out["policy"] = policy
+        out["geometry_gated"] = out["basket_key"].astype(str).isin(
+            sim.loc[sim["gated"], "basket_key"].astype(str)
+        )
+        return out
+
+    if policy == "lock_ai_physics_p45":
+        import joblib
+
+        model_path = ROOT / "models" / "stack_risk_v0.joblib"
+        if not model_path.is_file():
+            raise FileNotFoundError(f"Train E9d first: {model_path}")
+        model = joblib.load(model_path)
+        meta = meta_lookup_for_windows(export_dir, window)
+        gate_fn = make_model_gate(model, 0.45, meta)
+        enriched = enrich_baskets(df)
+        legs = load_window_legs(export_dir, window)
+        kw = health_805p_kwargs(cfg)
+        rows: list[dict] = []
+        for _, brow in enriched.iterrows():
+            bk = str(brow["basket_key"])
+            grp = legs.loc[legs["basket_key"] == bk].copy()
+            if grp.empty:
+                continue
+            leg_dicts = []
+            for _, r in grp.sort_values(["level", "open_time"]).iterrows():
+                d = r.to_dict()
+                d["basket_key"] = bk
+                d["open_time"] = pd.to_datetime(d["open_time"])
+                d["close_time"] = pd.to_datetime(d["close_time"])
+                leg_dicts.append(d)
+            result = replay_basket(pd.DataFrame(leg_dicts), l0_sl_gate_fn=gate_fn, **kw)
+            rows.append(
+                {
+                    "basket_key": bk,
+                    "open_time": brow["open_time"],
+                    "sim_pnl": float(result.sim_pnl),
+                    "basket_pnl": float(brow["basket_pnl"]),
+                }
+            )
+        sim_df = pd.DataFrame(rows).sort_values("open_time")
+        lot_min = float(cfg["thresholds"]["lot_mult_min"])
+        mem_in = sim_df.copy()
+        mem_in["basket_pnl"] = mem_in["sim_pnl"].astype(float)
+        out = simulate_memory(mem_in, lot_min)
+        out["pnl"] = out["sim_pnl"].astype(float)
+        out["policy"] = policy
+        return out
 
     raise ValueError(f"Unknown policy {policy!r}")
 
@@ -176,7 +266,8 @@ def monte_carlo_dd(
 
 def full_window_gates(metrics: dict, worst: float, gates: dict, policy: str) -> dict:
     out: dict = {}
-    if policy == "lock202":
+    lock202_like = policy in ("lock202", "lock202_adx_lt_18", "lock202_physics_p45")
+    if lock202_like:
         out["wire_pf"] = metrics["pf"] >= gates["lock202_wire_pf_floor"]
         out["wire_dd"] = metrics["max_dd_pct"] <= gates["lock202_wire_dd_max_pct"]
         out["longest_pf"] = metrics["pf"] >= gates["longest_pf_floor"]
@@ -228,15 +319,27 @@ def run_validation(
     fw_gates = full_window_gates(full_m, worst, gates, policy)
 
     verdict = wf["gate_pass"] and fw_gates.get("net_positive", False)
-    if policy == "lock202":
+    if policy in ("lock202", "lock202_adx_lt_18", "lock202_physics_p45"):
         verdict = verdict and fw_gates.get("wire_dd", False)
     if policy == "lock_ai" and "tail" in fw_gates:
         verdict = verdict and fw_gates["tail"]
+
+    gated_pct = None
+    if "geometry_gated" in df.columns:
+        gated_pct = round(100.0 * float(df["geometry_gated"].mean()), 1)
 
     return {
         "policy": policy,
         "window": window,
         "deposit": deposit,
+        "geometry_gate": (
+            "adx_lt_18"
+            if policy == "lock202_adx_lt_18"
+            else "physics_lr_p45"
+            if policy == "lock202_physics_p45"
+            else None
+        ),
+        "geometry_gated_pct": gated_pct,
         "date_range": {
             "start": str(df["open_time"].min()),
             "end": str(df["open_time"].max()),
@@ -263,6 +366,8 @@ def print_report(result: dict) -> None:
         f"  full: net=${f['net']:.2f} PF={f['pf']:.2f} "
         f"DD={f['max_dd_pct']:.1f}% trades={f['trades']} worst=${result['worst_basket']:.2f}"
     )
+    if result.get("geometry_gated_pct") is not None:
+        print(f"        geometry gated: {result['geometry_gated_pct']:.1f}% of baskets")
     print(
         f"  WF:   {wf['n_pass']}/{wf['n_folds']} folds pass "
         f"({100*wf['pass_rate']:.0f}%) — {'PASS' if wf['gate_pass'] else 'FAIL'}"
@@ -290,7 +395,7 @@ def main() -> int:
         "--policy",
         choices=["all", *POLICIES],
         default="all",
-        help="lock202=production baskets, lock_ai=805p+memory replay",
+        help="lock202 | lock_ai | lock202_adx_lt_18 (E9c) | all",
     )
     parser.add_argument(
         "--window-lock202",
@@ -313,14 +418,19 @@ def main() -> int:
         "--output",
         type=Path,
         default=ROOT / "features" / "e7_report.json",
+        help="Output JSON (e7_prime_report.json when --policy lock202_adx_lt_18 only)",
     )
     args = parser.parse_args()
 
     cfg = load_config()
     policies = list(POLICIES) if args.policy == "all" else [args.policy]
 
+    if args.policy in ("lock202_adx_lt_18", "lock202_physics_p45") and args.output == ROOT / "features" / "e7_report.json":
+        args.output = ROOT / "features" / "e7_prime_report.json"
+
     report: dict = {
         "e7": "EDGE-702/703",
+        "e7_prime": args.policy in ("lock202_adx_lt_18", "lock202_physics_p45", "all"),
         "deposit": args.deposit,
         "runs": [],
     }
@@ -329,7 +439,7 @@ def main() -> int:
     for pol in policies:
         if args.windows:
             windows = [w.strip() for w in args.windows.split(",")]
-        elif pol == "lock202":
+        elif pol in ("lock202", "lock202_adx_lt_18", "lock202_physics_p45"):
             windows = list(dict.fromkeys([args.window_lock202, "w02_ext19mo"]))
         else:
             windows = [args.window_lock_ai]

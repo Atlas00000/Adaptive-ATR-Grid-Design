@@ -133,6 +133,16 @@
       "path":"Include\\AIEntryContextModel.mqh",
       "compile":false,
       "relative_to_project":true
+    },
+    {
+      "path":"Include\\AIModelRuntime.mqh",
+      "compile":false,
+      "relative_to_project":true
+    },
+    {
+      "path":"Include\\AIModelBundle.mqh",
+      "compile":false,
+      "relative_to_project":true
     }
   ]
 }

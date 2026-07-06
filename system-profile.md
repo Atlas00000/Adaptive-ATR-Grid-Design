@@ -1,12 +1,13 @@
 # AAG System Profile
 
-*Adaptive ATR Grid — EURUSD M5 — LOCK-202 production · LOCK-AI forward test*
+*Adaptive ATR Grid — EURUSD M5 — LOCK-202 non-AI · LOCK-809 AI canonical*
 
 **Last updated:** 2026-07-06  
-**EA version:** 1.32  
-**Production preset:** `AAG_EURUSD_M5_production.set` (LOCK-202)  
-**AI stack preset:** `AAG_EURUSD_M5_AI-803_memory-805p.set` (LOCK-AI)  
-**Status:** Discovery + E3–E6 **complete**; E8 **LOCK-AI** locked; **E7 FAIL** — not live-ready.
+**EA version:** 1.33  
+**Non-AI preset:** `AAG_EURUSD_M5_production.set` (**LOCK-202**)  
+**AI preset:** `AAG_EURUSD_M5_AI-809_physics-p45.set` (**LOCK-809**)  
+**Defensive AI:** `AAG_EURUSD_M5_AI-803_memory-805p.set` (**LOCK-AI**)  
+**Status:** **LOCK-809 MT5 wire winner on $200 ext22**; E7′ WF FAIL — not live.
 
 ---
 
@@ -14,14 +15,15 @@
 
 AAG is a **mean-reversion grid EA** that exploits short-term rotational price action during the US–London overlap (15–17), gated by low trend strength (ADX) and mild EMA structure plus **RSI rotation**.
 
-**Two stacks:**
+**Two deployment stacks (post wire validation):**
 
-| Stack | Preset | Role | 19-mo PF | Eq DD | Tail |
-|---|---|---|---|---|---|
-| **LOCK-202** | `production.set` | Max net, low DD reference | **1.46** | **23%** | −$63 |
-| **LOCK-AI** | `AI-803_memory-805p.set` | Demo / forward test | **1.33** | 74% | **−$27** ✓ |
+| Stack | Preset | Role | Best window | Notes |
+|---|---|---|---|---|
+| **LOCK-202** | `production.set` | **Non-AI reference** | Jan 2025–Jul 2026 (+$623, DD 23%) | Longest stress needed **$500** dep historically |
+| **LOCK-809** | `AI-809_physics-p45.set` | **Canonical AI** | Jan 2022–Jul 2026 (+$509, PF 1.11, **$200**) | Beats LOCK-202 w03 (−$50) on same deposit |
+| **LOCK-AI** | `AI-803_memory-805p.set` | Defensive tail cap | 2025+ wire | Tail −$27 ✓; more complex than 809 |
 
-LOCK-202 is **profitable and stable** over Jan 2025 – Jul 2026. LOCK-AI **cuts tail** on the same wire window but trades net for safety (higher DD, lower PF). Extending LOCK-AI to **Jan 2022+** drops PF to **1.12** and breaks tail (−$64). Enhancement phases E3–E6 tested 20+ variants; **none beat production**. AI layers 804/806/807 are **deferred**.
+LOCK-202 remains **max-net on the wire window**. LOCK-809 is the **AI winner for $200 accounts across all windows** — one geometry toggle, no 803/805 stack. LOCK-AI still useful when **tail cap** matters more than simplicity.
 
 ---
 
@@ -253,14 +255,17 @@ python scripts/simulate_policy.py --policy memory_805p --window AI806_805p
 
 ## 7. Live readiness
 
-| Gate | LOCK-202 (19 mo) | LOCK-AI (wire) | LOCK-AI (ext22) |
+| Gate | LOCK-202 (wire) | LOCK-809 (MT5 wire) | LOCK-AI (wire) |
 |---|---|---|---|
-| PF ≥ 1.1 | **1.46** ✓ | **1.33** ✓ | 1.12 ✓ |
-| Eq DD < 25% | **23%** ✓ | 74% ✗ | 64% ✗ |
-| Tail < −$35 | ✗ (−$63) | **✓** | ✗ (−$64) |
-| Walk-forward | **FAIL** — 11/16 (w02), 15/28 (LOCK-AI) | — | — |
+| PF ≥ 1.1 | **1.46** ✓ | **1.11** ext22 ✓ / 1.42 wire | **1.33** ✓ |
+| Eq DD < 25% | **23%** ✓ | 70–95%* ✗ | 74% ✗ |
+| Tail < −$35 | ✗ (−$63) | ✗ (−$64) | **✓** (−$27) |
+| $200 ext22 net | −$50 (w03) | **+$509** ✓ | +$508 |
+| Walk-forward | **FAIL** | **FAIL** (E7′) | **FAIL** |
 
-**Verdict:** **LOCK-202** for max-net paper. **LOCK-AI** for 2025+ forward test. **No live** — E7 failed (WF + longest PF).
+\*DD % on $200; absolute drawdowns comparable to LOCK-AI ext22.
+
+**Verdict:** **LOCK-202** non-AI max-net paper. **LOCK-809** canonical AI on **$200** forward test. **LOCK-AI** when tail cap matters. **No live** — E7′ WF < 75%.
 
 ---
 
@@ -268,9 +273,11 @@ python scripts/simulate_policy.py --policy memory_805p --window AI806_805p
 
 | File | Purpose |
 |---|---|
-| `AAG.mq5` | Expert advisor (v1.32) |
-| `Presets/AAG_EURUSD_M5_production.set` | LOCK-202 production |
-| `Presets/AAG_EURUSD_M5_AI-803_memory-805p.set` | LOCK-AI canonical |
+| `AAG.mq5` | Expert advisor (v1.33) |
+| `Presets/AAG_EURUSD_M5_production.set` | **LOCK-202** non-AI reference |
+| `Presets/AAG_EURUSD_M5_AI-809_physics-p45.set` | **LOCK-809** canonical AI |
+| `Presets/AAG_EURUSD_M5_AI-803_memory-805p.set` | **LOCK-AI** defensive overlay |
+| `Presets/AAG_EURUSD_M5_LOCK-AI+809_physics-p45.set` | **LOCK-AI+809** stacked validation |
 | `ai_enhance.md` | E8 programme, wire log, metrics |
 | `compo-report.md` | Composition report |
 | `Edge Discovery.md` | E0–E6 test log |
@@ -278,4 +285,4 @@ python scripts/simulate_policy.py --policy memory_805p --window AI806_805p
 
 ---
 
-*Update after E7 walk-forward or production stack change.*
+*Update after E7′ re-pass or deployment stack change.*

@@ -27,6 +27,13 @@ private:
    bool              m_cascade_pending;
    int               m_cascade_legs_before;
    datetime          m_cascade_trigger_time;
+   bool              m_block_add_after_l0_sl;
+   bool              m_l0_sl_pending;
+   double            m_l0_sl_deal_pl;
+   double            m_l0_tracked_mae;
+   double            m_l0_tracked_mfe;
+   bool              m_l0_extremes_init;
+   datetime          m_l0_sl_close_time;
    CLogger          *m_log;
    CDiagnostics     *m_diag;
    CTrade            m_trade;
@@ -251,6 +258,36 @@ private:
       m_trail_armed = false;
      }
 
+   void              TryCaptureL0SLClose(const double deal_pl)
+     {
+      if(!InpAIPhysicsStackEnabled)
+         return;
+
+      for(int i = 0; i < ArraySize(m_tickets); i++)
+        {
+         if(PositionSelectByTicket(m_tickets[i]))
+            continue;
+         if(m_filled_levels[i] != 0)
+            continue;
+
+         m_l0_sl_pending = true;
+         m_l0_sl_deal_pl = deal_pl;
+         m_l0_sl_close_time = TimeCurrent();
+         return;
+        }
+     }
+
+   void              ResetL0Tracking()
+     {
+      m_block_add_after_l0_sl = false;
+      m_l0_sl_pending = false;
+      m_l0_sl_deal_pl = 0.0;
+      m_l0_tracked_mae = 0.0;
+      m_l0_tracked_mfe = 0.0;
+      m_l0_extremes_init = false;
+      m_l0_sl_close_time = 0;
+     }
+
    double            GetTotalVolume()
      {
       double volume = 0.0;
@@ -315,6 +352,13 @@ public:
                      m_cascade_pending(false),
                      m_cascade_legs_before(0),
                      m_cascade_trigger_time(0),
+                     m_block_add_after_l0_sl(false),
+                     m_l0_sl_pending(false),
+                     m_l0_sl_deal_pl(0.0),
+                     m_l0_tracked_mae(0.0),
+                     m_l0_tracked_mfe(0.0),
+                     m_l0_extremes_init(false),
+                     m_l0_sl_close_time(0),
                      m_log(NULL),
                      m_diag(NULL)
      {}
@@ -396,6 +440,10 @@ public:
            }
         }
 
+      const long deal_reason = HistoryDealGetInteger(deal, DEAL_REASON);
+      if(open_after > 0 && open_after < legs_before && deal_reason == DEAL_REASON_SL)
+         TryCaptureL0SLClose(deal_pl);
+
       ScanPositions();
      }
 
@@ -441,6 +489,7 @@ public:
       m_bias = BIAS_NONE;
       m_basket_start = 0;
       ResetTrail();
+      ResetL0Tracking();
       m_cascade_pending = false;
       m_cascade_legs_before = 0;
       m_cascade_trigger_time = 0;
@@ -456,6 +505,7 @@ public:
       m_bias = bias;
       m_basket_start = TimeCurrent();
       ResetTrail();
+      ResetL0Tracking();
       ArrayResize(m_tickets, 1);
       m_tickets[0] = ticket;
       ArrayResize(m_filled_levels, 1);
@@ -889,6 +939,69 @@ public:
          return true;
         }
       return false;
+     }
+
+   void              UpdateL0Extremes()
+     {
+      if(m_basket_start <= 0)
+         return;
+
+      for(int i = 0; i < ArraySize(m_tickets); i++)
+        {
+         if(m_filled_levels[i] != 0)
+            continue;
+         if(!PositionSelectByTicket(m_tickets[i]))
+            continue;
+
+         const double pl = PositionGetDouble(POSITION_PROFIT) +
+                           PositionGetDouble(POSITION_SWAP);
+         if(!m_l0_extremes_init)
+           {
+            m_l0_tracked_mae = pl;
+            m_l0_tracked_mfe = pl;
+            m_l0_extremes_init = true;
+           }
+         else
+           {
+            if(pl < m_l0_tracked_mae)
+               m_l0_tracked_mae = pl;
+            if(pl > m_l0_tracked_mfe)
+               m_l0_tracked_mfe = pl;
+           }
+         return;
+        }
+     }
+
+   bool              PollL0SLPhysicsEvent(double &deal_pl,
+                                          double &mae_usd,
+                                          double &mfe_usd,
+                                          datetime &close_time) const
+     {
+      if(!m_l0_sl_pending)
+         return false;
+
+      deal_pl = m_l0_sl_deal_pl;
+      mae_usd = m_l0_tracked_mae;
+      mfe_usd = m_l0_tracked_mfe;
+      close_time = m_l0_sl_close_time;
+      return true;
+     }
+
+   void              ClearL0SLPhysicsEvent()
+     {
+      m_l0_sl_pending = false;
+     }
+
+   bool              IsAddBlockedAfterL0SL() const
+     {
+      return m_block_add_after_l0_sl;
+     }
+
+   void              SetBlockAddAfterL0SL(const bool block)
+     {
+      m_block_add_after_l0_sl = block;
+      if(block && m_log != NULL)
+         m_log.LogBasket("AI-809 physics gate — block grid adds after L0 SL");
      }
   };
 

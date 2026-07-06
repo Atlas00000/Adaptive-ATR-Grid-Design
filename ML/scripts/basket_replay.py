@@ -4,11 +4,12 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import timedelta
 from pathlib import Path
-from typing import Literal
+from typing import Callable, Literal
 
 import pandas as pd
 
 HealthMode = Literal["flatten_only", "full"]
+L0SlGateFn = Callable[[dict, float], bool]
 
 TIGHTEN_THRESHOLD = 72.0
 STRESS_FLATTEN_THRESHOLD = 75.0
@@ -259,6 +260,11 @@ def replay_basket(
     legs: pd.DataFrame,
     *,
     mode: HealthMode = "flatten_only",
+    max_grid_levels: int | None = None,
+    spacing_mult: float = 1.0,
+    spacing_min_gap_sec: float = 300.0,
+    no_add_after_l0_sl: bool = False,
+    l0_sl_gate_fn: L0SlGateFn | None = None,
     flatten_at: float = 88.0,
     no_add_at: float = 55.0,
     checkpoint_sec: int = 60,
@@ -316,6 +322,23 @@ def replay_basket(
             if int(leg["level"]) >= level:
                 blocked_levels.add(int(leg["level"]))
 
+    def spacing_blocks_level(leg: dict) -> bool:
+        """Wider spacing proxy: block add if inter-level gap shorter than scaled minimum."""
+        if spacing_mult <= 1.0 or int(leg["level"]) == 0:
+            return False
+        lvl = int(leg["level"])
+        prev_opens = [r["open_time"] for r in leg_rows if int(r["level"]) == lvl - 1]
+        if not prev_opens:
+            prev_t = basket_start
+        else:
+            prev_t = min(prev_opens)
+        gap_sec = (leg["open_time"] - prev_t).total_seconds()
+        required = spacing_min_gap_sec * spacing_mult * lvl
+        return gap_sec < required
+
+    if max_grid_levels is not None:
+        levels_blocked_from(max_grid_levels)
+
     for evt_time, kind, leg in events:
         if sim_pnl is not None:
             break
@@ -323,6 +346,9 @@ def replay_basket(
         if kind == "open":
             lvl = int(leg["level"])
             if lvl in blocked_levels:
+                continue
+            if spacing_blocks_level(leg):
+                blocked_levels.add(lvl)
                 continue
 
             if lvl > 0 and mode == "full":
@@ -487,6 +513,18 @@ def replay_basket(
             if closed.get("_tighten"):
                 profit *= TP_TIGHTEN_RATIO
             realized += profit
+
+            if lvl == 0 and str(leg.get("exit_reason", "")).upper() == "SL":
+                should_block = no_add_after_l0_sl
+                if l0_sl_gate_fn is not None:
+                    should_block = bool(l0_sl_gate_fn(leg, realized))
+                elif not no_add_after_l0_sl:
+                    should_block = False
+                if should_block:
+                    levels_blocked_from(1)
+                    if intervention == "none":
+                        intervention = "physics_l0_sl_gate" if l0_sl_gate_fn else "no_add_after_l0_sl"
+
             if not open_legs:
                 sim_pnl = realized
 

@@ -267,7 +267,7 @@ def export_entry_lr(model_path: Path, out_path: Path, version: str) -> None:
 def main() -> int:
     parser = argparse.ArgumentParser(description="Export model for AISupervisor.mqh")
     parser.add_argument("--model", type=Path, required=True)
-    parser.add_argument("--type", choices=("health", "regime", "entry"), default="health")
+    parser.add_argument("--type", choices=("health", "regime", "entry", "stack"), default="health")
     parser.add_argument(
         "--out",
         type=Path,
@@ -287,6 +287,25 @@ def main() -> int:
         version = args.version or "AI-804_v0"
         export_entry_lr(args.model, out, version)
         print(f"[AI-804] export_mql_constants")
+    elif args.type == "stack":
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        from e9d_physics_labels import PHYSICS_FEATURES
+
+        out = args.out or ROOT.parent / "Include" / "AIStackRiskModel.mqh"
+        version = args.version or "AI-809_v0"
+        export_logistic_imputer(
+            args.model,
+            out,
+            version=version,
+            version_define="AI_STACK_RISK_MODEL_VERSION",
+            guard="AAG_AISTACKRISKMODEL_MQH",
+            title="AIStackRiskModel.mqh — AI-809 L0-SL stack-risk scorer",
+            features=PHYSICS_FEATURES,
+            prob_fn="AIStackRiskBlockProb",
+            feature_prefix="AIStack",
+            count_define="AI_STACK_RISK_FEATURE_COUNT",
+        )
+        print(f"[AI-809] export_mql_constants")
     else:
         out = args.out or ROOT.parent / "Include" / "AIHealthModel.mqh"
         version = args.version or "AI-805_v0"

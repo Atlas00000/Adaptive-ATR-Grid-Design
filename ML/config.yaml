@@ -6,6 +6,7 @@ baseline:
   timeframe: M5
   production_trades_19mo: 324
   production_pf_19mo: 1.46
+  production_net_19mo: 623.0
   production_dd_equity_19mo: 23.0
 
 paths:
@@ -154,6 +155,40 @@ expectancy_gates:
   tail_loss_usd: -35.0
   avg_win_improve_pct: 0.05
   avg_loss_improve_pct: 0.05
+
+# E9b grid geometry offline sweep (e9b_grid_geometry.py)
+e9b_gates:
+  min_trades_pct: 1.0                 # same basket count (geometry overlay)
+  net_vs_baseline_pct: 0.0            # must improve net vs baseline
+  tail_loss_usd: -35.0
+  d2_pf_floor: 1.0
+
+e9b_policies:
+  geometry_rule: no_add_after_l0_sl
+
+# E9d physics stack-risk labels + gate (e9d_physics_labels.py, e9d_simulate.py)
+e9d_gates:
+  promote_threshold: 0.45
+  h1_net_min: -80.0
+
+e9d_policies:
+  promote_candidate: physics_lr_p45   # L0-SL LR gate @ 0.45
+
+# E9c context-gated geometry (e9c_context_geometry.py)
+e9c_gates:
+  net_vs_prod_pct: -0.05               # w02 net >= prod * 0.95 ($591)
+  w03_net_delta_min: 50.0              # improve w03 vs baseline by >= $50
+  tail_loss_usd: -35.0
+  max_gated_pct: 55.0                  # gate must not fire >55% on w02
+e9c_policies:
+  promote_candidate: adx_lt_18       # entry ADX < 18 -> no_add_after_l0_sl
+
+# E9a basket intelligence segments (e9a_basket_intelligence.py)
+e9a_segments:
+  stress_pocket: "2024_h1"
+  bleed_months: ["2024-04", "2024-05", "2024-06", "2024-07"]
+  underwater_usd: 1.0                 # path_mae threshold for "underwater"
+  long_basket_sec: 14400               # 4h
 
 models:
   entry_context: entry_context_v0

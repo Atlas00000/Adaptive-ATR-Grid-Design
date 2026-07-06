@@ -7,11 +7,12 @@
 | **Project** | AAG (Adaptive ATR Grid) |
 | **Platform** | MetaTrader 5 |
 | **Instrument** | EURUSD M5 |
-| **EA version** | 1.32 (production LOCK-202 · AI LOCK-AI) |
+| **EA version** | 1.33 (LOCK-202 non-AI · LOCK-809 AI canonical) |
 | **Report date** | 2026-07-06 |
 | **Repository** | [Adaptive-ATR-Grid-Design](https://github.com/Atlas00000/Adaptive-ATR-Grid-Design) |
-| **Production preset** | `Presets/AAG_EURUSD_M5_production.set` (LOCK-202) |
-| **AI stack preset** | `Presets/AAG_EURUSD_M5_AI-803_memory-805p.set` (LOCK-AI) |
+| **Non-AI preset** | `Presets/AAG_EURUSD_M5_production.set` (**LOCK-202**) |
+| **AI preset** | `Presets/AAG_EURUSD_M5_AI-809_physics-p45.set` (**LOCK-809**) |
+| **Defensive AI** | `Presets/AAG_EURUSD_M5_AI-803_memory-805p.set` (**LOCK-AI**) |
 
 ---
 
@@ -25,9 +26,10 @@ We set out to build an automated **mean-reversion grid** EA that adapts spacing 
 - A disciplined **edge-discovery pipeline** (E0–E2) that turned a −$180 / PF 0.67 baseline into a **+$623 / PF 1.46** production stack over 19 months
 - **Four enhancement layers** (E3 regime, E4 grid/risk, E5 exits, E6 structure) — all coded, preset-tested, and **rejected** vs production
 - **Phase E8 AI supervisor** (LOCK-AI) — 803 memory + 805p basket health; tail capped **−$27.40** on 2025+ wire window; **804/806/807 deferred**
+- **Phase E9 adaptive geometry** (LOCK-809) — L0-SL physics gate (`physics_lr_p45`); **MT5 wire winner on $200** across all windows
 - **40+ Strategy Tester presets**, ML offline pipeline (`ML/`), diagnostics CSV tooling, and full documentation trail
 
-**Bottom line:** The edge is **real but narrow** — 15–17 server time, RSI rotation, full 6-level grid. **LOCK-202** remains max-net / low-DD reference (PF 1.46, 23% DD over 19 mo). **LOCK-AI** is the canonical **demo / forward-test** stack — cuts tail on 2025+ but PF decays on pre-2025 history (1.12, tail −$64). **Not live-ready** on full history until E7 walk-forward validation.
+**Bottom line:** The edge is **real but narrow** — 15–17 server time, RSI rotation, full 6-level grid. **LOCK-202** remains **non-AI max-net** reference (PF 1.46, 23% DD over 19 mo on wire window; **$500** deposit historically needed for longest stress). **LOCK-809** is the **canonical AI preset** — profitable Jan 2022–Jul 2026 on **$200** (+$509, PF 1.11) where LOCK-202 longest bleeds (−$50). **LOCK-AI** remains optional defensive overlay (tail cap). **Not live-ready** — E7′ WF < 75%.
 
 ---
 
@@ -327,6 +329,7 @@ Presets live in `Presets/`; copies for Strategy Tester in `MQL5/Profiles/Tester/
 8. **Over-filtering is the recurring failure mode** — E3, E6, and strict E2 filters all die by trade starvation.
 9. **AI tail guard works on 2025+** — 805p SL cascade caps largest loss at −$27.40; pre-2025 regimes still produce −$64 baskets.
 10. **Exit / entry AI layers deferred** — 804, 806, 807 failed offline or MT5 gates; memory + health only in LOCK-AI.
+11. **Geometry beats depth on $200** — LOCK-809 physics gate turns ext22 from −$50 (LOCK-202) to **+$509** on same deposit; simpler than full LOCK-AI stack.
 
 ---
 
@@ -334,30 +337,41 @@ Presets live in `Presets/`; copies for Strategy Tester in `MQL5/Profiles/Tester/
 
 | Layer | ID | Status | Role |
 |---|---|---|---|
-| Infrastructure | AI-800/808 | **Shipped** v1.32 | Runtime, bundle, embedded LR, optional ONNX |
+| Infrastructure | AI-800/808 | **Shipped** v1.33 | Runtime, bundle, embedded LR, optional ONNX |
 | Performance memory | AI-803 | **Wired** | Lot throttle after bad rolling PF |
 | Basket health | AI-805p | **Wired** | SL cascade, hard cap, stress flatten — tail −$27 |
+| **Physics geometry** | **AI-809** | **Wired** v1.33 | L0-SL stack-risk gate — **canonical AI preset** |
 | Entry context | AI-804 | **Deferred** | Tail fail on long window |
 | Regime skip | AI-806 | **Deferred** | LR never fires at 0.85; net worse at 0.62 |
 | Exit policy | AI-807 | **Research** | Early TP clips winners — defer |
 | Offline sim | AI-810 | **Shipped** | Causal basket replay in `ML/scripts/` |
 
-**Canonical AI preset:** `AAG_EURUSD_M5_AI-803_memory-805p.set` (**LOCK-AI**). Full detail: [`ai_enhance.md`](ai_enhance.md).
+**Canonical AI preset:** `AAG_EURUSD_M5_AI-809_physics-p45.set` (**LOCK-809**). Defensive overlay: `AI-803_memory-805p.set` (**LOCK-AI**). Full detail: [`ai_enhance.md`](ai_enhance.md) §9.15.
 
 ---
 
-## 11. E7 validation — COMPLETE (FAIL) · E9 next
+## 11. E7 / E9 validation — COMPLETE (FAIL) · LOCK-809 wire PASS
 
 | Task | ID | Gate | Result (2026-07-06) |
 |---|---|---|---|
-| Walk-forward (3m / 1m) | EDGE-702 | ≥75% folds | **FAIL** — LOCK-202: 11/16 w02, 22/52 w03; LOCK-AI: 15/28 |
+| Walk-forward (3m / 1m) | EDGE-702 | ≥75% folds | **FAIL** — LOCK-202: 11/16 w02; physics_p45: 62%/54% |
 | Monte Carlo shuffle | EDGE-703 | DD tail | **PASS** — actual DD ≤ MC p95 on wire windows |
-| Longest-window stress | — | PF ≥ 1.1 | **FAIL** — w03 PF 0.99 |
-| LOCK-AI ext22 tail | — | < −$35 | **FAIL** — MT5 −$64 |
+| Longest-window stress | — | PF ≥ 1.1 | **FAIL** offline; **LOCK-809 MT5 ext22 PF 1.11** ✓ |
+| LOCK-AI / LOCK-809 ext22 tail | — | < −$35 | **FAIL** — MT5 −$64.10 |
 
-**Script:** `ML/scripts/e7_validate.py` · See [`ai_enhance.md`](ai_enhance.md) §9.9.
+### MT5 wire — LOCK-809 ($200, v1.33)
 
-**No live trading.** LOCK-202 paper / LOCK-AI forward test only. **Next: E9** (basket intelligence + grid geometry on 2024 H1 OOS pocket).
+| Window | Net | PF | Eq DD | Largest loss |
+|--------|-----|-----|-------|--------------|
+| Jan–Jul 2026 | +$318 | 2.28 | 14% | −$15.60 |
+| Jan 2025–Jul 2026 | +$566 | 1.42 | 70% | −$63.50 |
+| **Jan 2022–Jul 2026** | **+$509** | **1.11** | 95%* | −$64.10 |
+
+\*DD % on $200 deposit; LOCK-202 w03 at $200 was **−$50 / PF 0.99** on comparable stress.
+
+**Script:** `ML/scripts/e7_validate.py` · See [`ai_enhance.md`](ai_enhance.md) §9.9–§9.15.
+
+**No live trading.** **LOCK-202** non-AI paper · **LOCK-809** AI forward test on $200 · E7′ WF still FAIL.
 
 ---
 
@@ -366,11 +380,12 @@ Presets live in `Presets/`; copies for Strategy Tester in `MQL5/Profiles/Tester/
 ### Compile & run
 
 1. Open `AAG.mqproj` in MetaEditor
-2. Compile **AAG.mq5** (target: v1.32, 0 errors)
+2. Compile **AAG.mq5** (target: v1.33, 0 errors)
 3. Strategy Tester → load preset from `Profiles/Tester/`:
-   - **Production:** `AAG_EURUSD_M5_production.set` (LOCK-202)
-   - **AI forward test:** `AAG_EURUSD_M5_AI-803_memory-805p.set` (LOCK-AI)
-4. EURUSD M5, variable spread, $200 deposit
+   - **Non-AI reference:** `AAG_EURUSD_M5_production.set` (**LOCK-202**)
+   - **AI forward test:** `AAG_EURUSD_M5_AI-809_physics-p45.set` (**LOCK-809**)
+   - **Defensive overlay:** `AAG_EURUSD_M5_AI-803_memory-805p.set` (**LOCK-AI**)
+4. EURUSD M5, variable spread, **$200 deposit** (LOCK-809 validated across windows)
 
 ### Enhance (if resuming)
 
@@ -380,7 +395,7 @@ Presets live in `Presets/`; copies for Strategy Tester in `MQL5/Profiles/Tester/
 
 ### Deploy (not yet)
 
-Live deployment **not approved** until E7 gates pass. Paper trade production preset only.
+Live deployment **not approved** until E7′ WF ≥ 75%. Paper: **LOCK-202** (non-AI wire reference) or **LOCK-809** (AI on $200).
 
 ---
 
@@ -388,15 +403,16 @@ Live deployment **not approved** until E7 gates pass. Paper trade production pre
 
 | Area | Status |
 |---|---|
-| Execution engine | **Complete** (v1.32) |
+| Execution engine | **Complete** (v1.33) |
 | Edge discovery | **Complete** (LOCK-202) |
 | Enhancement matrix | **Complete** (E3–E6, all rejected) |
-| AI supervisor (E8) | **LOCK-AI wired** (803+805p); 804/806/807 deferred |
-| ML offline pipeline | **Complete** (AI-801–810, 807 research) |
+| AI geometry (E9/809) | **Wired** — LOCK-809 canonical AI preset |
+| AI supervisor (E8) | **LOCK-AI** optional (803+805p); 804/806/807 deferred |
+| ML offline pipeline | **Complete** (E9a–E9d, E7′, AI-810) |
 | Documentation | **Complete** |
-| Validation (E7) | **Complete — FAIL** | WF <75%; longest PF 0.99 |
+| Validation (E7′) | **WF FAIL**; MT5 wire **PASS** (LOCK-809 $200 ext22) |
 | Live readiness | **Not met** |
 
 ---
 
-*AAG — Adaptive ATR Grid Design · Built and validated July 2026 · LOCK-202 production · LOCK-AI forward test*
+*AAG — Adaptive ATR Grid Design · July 2026 · LOCK-202 non-AI · LOCK-809 AI canonical · EA v1.33*

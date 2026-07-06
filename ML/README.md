@@ -68,6 +68,50 @@ python scripts/e7_validate.py --policy all
 
 Basket-level WF (3m/1m) + 2000-iter MC shuffle. See [`../ai_enhance.md`](../ai_enhance.md) §9.9.
 
+### E7′ re-validation (E9c `adx_lt_18` policy)
+
+```bash
+python scripts/e7_validate.py --policy lock202_adx_lt_18
+```
+
+See [`../ai_enhance.md`](../ai_enhance.md) §9.13 · report `features/e7_prime_report.json`.
+
+### E9a basket intelligence (offline)
+
+```bash
+python scripts/e9a_basket_intelligence.py --window all
+```
+
+Recovery, lifetime, capital efficiency, depth segments. See [`../ai_enhance.md`](../ai_enhance.md) §9.10.
+
+### E9b grid geometry sweep (offline)
+
+```bash
+python scripts/e9b_grid_geometry.py --window all
+```
+
+Depth cap, spacing, `no_add_after_l0_sl` on causal replay. See [`../ai_enhance.md`](../ai_enhance.md) §9.11.
+
+### E9c context-gated geometry
+
+```bash
+python scripts/e9c_context_geometry.py
+```
+
+Sweep entry-context gates for `no_add_after_l0_sl`. See [`../ai_enhance.md`](../ai_enhance.md) §9.12.
+
+### E9d physics stack-risk gate
+
+```bash
+python scripts/e9d_physics_labels.py
+python scripts/e9d_simulate.py
+python scripts/e7_validate.py --policy lock202_physics_p45
+python scripts/e7_validate.py --policy lock_ai_physics_p45
+python scripts/export_mql_constants.py --model models/stack_risk_v0.joblib --type stack
+```
+
+See [`../ai_enhance.md`](../ai_enhance.md) §9.14–§9.15 · promote **`physics_lr_p45`** · presets **LOCK-809** / **LOCK-AI+809**.
+
 ### AI-808 model export + runtime
 
 ```bash

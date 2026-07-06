@@ -186,6 +186,8 @@ input double InpAIRegimeTrendSkipProb     = 0.62;  // LR wire max ~0.69 — 0.85
 input bool   InpAIRegimeLogScore          = true;   // log P(bad) at arm when >= 0.45
 input double InpAILotMultMin              = 0.65;
 input double InpAILotMultMax              = 1.00;
+input bool   InpAIPhysicsStackEnabled     = false;  // AI-809: L0-SL stack-risk geometry gate
+input double InpAIPhysicsStackThreshold   = 0.45;   // block L1+ adds when P(block) >= threshold
 
 //--- Inputs: General
 input group "=== General ==="
