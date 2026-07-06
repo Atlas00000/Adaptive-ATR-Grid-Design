@@ -1,0 +1,12 @@
+# Generated data — keep structure, ignore large files
+export/*
+!export/.gitkeep
+features/*
+!features/.gitkeep
+models/*
+!models/registry.json
+!models/.gitkeep
+.venv/
+__pycache__/
+*.pyc
+.ipynb_checkpoints/

@@ -1,10 +1,8 @@
-; AAG_EURUSD_M5_production
-; PRODUCTION — winning stack (= EDGE-LOCK-202 v2)
-; Session 15–17 + RSI rotation | SL 2×ATR / TP 1.5×ATR | grid 6 | basket TP $50
-; Jan–Jul 2025: +$273 | PF 1.93 | WR 72% | DD 12% | 96 trades
-; Jan 25–Jul 26: +$623 | PF 1.46 | WR 66% | DD 23%
-; Use for live chart + backtest validation. Enhancement tests copy this, change one layer.
-; EA v1.09+ | EURUSD M5
+; AAG_EURUSD_M5_AI-806_regime-p80
+; E8 AI-806 — 805p + regime skip @ P>=0.80 (sweep candidate)
+; Base = AI-806_regime | only change: InpAIRegimeTrendSkipProb=0.80
+; Tester: Jan 2024 – Jul 2026 · $200 · compare vs AI-806_regime (0.85) / 805p
+; Copy to: MQL5\Profiles\Tester\
 ;
 ; === Indicators ===
 InpATRPeriod=14||14||1||140||N
@@ -82,17 +80,35 @@ InpStructLiqSweepUsePD=false||false||0||true||N
 InpStructLiqSweepMinATR=0.05||0.05||0.005000||0.500000||N
 InpStructRangeMidAnchorEnabled=false||false||0||true||N
 InpStructRangeMidSource=0||0||0||1||N
-; === AI Supervisor (E8) ===
-InpAIEnabled=false||false||0||true||N
-InpAIModelVersion=||N
+; === AI Supervisor (E8) — 805p + AI-806 @ 0.80 ===
+InpAIEnabled=true||false||0||true||N
+InpAIModelVersion=AI-806_v0||N
 InpAIMemoryEnabled=false||false||0||true||N
 InpAIEntryContextEnabled=false||false||0||true||N
-InpAIBasketHealthEnabled=false||false||0||true||N
-InpAIRegimeEnabled=false||false||0||true||N
+InpAIBasketHealthEnabled=true||false||0||true||N
+InpAIHealthFlattenOnly=true||false||0||true||N
+InpAIHealthCheckSec=60||60||1||600||N
+InpAIHealthFlattenFloatUSD=-18.0||-18.0||-1.800000||-180.000000||N
+InpAIHealthHardCapEnabled=true||false||0||true||N
+InpAIHealthHardCapUSD=-25.0||-25.0||-2.500000||-250.000000||N
+InpAIHealthHardCapL1Enabled=true||false||0||true||N
+InpAIHealthHardCapL1USD=-28.0||-28.0||-2.800000||-280.000000||N
+InpAIHealthHardCapL1MinSec=30||30||1||300||N
+InpAIHealthBasketCapEnabled=true||false||0||true||N
+InpAIHealthBasketCapUSD=-32.0||-32.0||-3.200000||-320.000000||N
+InpAIHealthBasketCapMinLegs=1||1||1||6||N
+InpAIHealthSLCascadeEnabled=true||false||0||true||N
+InpAIHealthSLCascadeMinLegs=2||2||1||6||N
+InpAIHealthSLCascadeAnyPartial=false||false||0||true||N
+InpAIHealthSLCascadeLossUSD=-9.0||-9.0||-0.900000||-90.000000||N
+InpAIHealthSLCascadeStackUSD=-28.0||-28.0||-2.800000||-280.000000||N
+InpAIHealthSLCascadeFloatUSD=-8.0||-8.0||-0.800000||-80.000000||N
+InpAIHealthSLCascadeUseFloat=false||false||0||true||N
+InpAIRegimeEnabled=true||false||0||true||N
 InpAIEntryBlockFloor=0.12||0.12||0.012000||1.200000||N
 InpAIHealthNoAddThreshold=55.0||55.0||5.500000||550.000000||N
 InpAIHealthFlattenThreshold=88.0||88.0||8.800000||880.000000||N
-InpAIRegimeTrendSkipProb=0.85||0.85||0.085000||8.500000||N
+InpAIRegimeTrendSkipProb=0.80||0.80||0.080000||8.000000||N
 InpAILotMultMin=0.65||0.65||0.065000||6.500000||N
 InpAILotMultMax=1.0||1.0||0.100000||10.000000||N
 ; === General ===
@@ -123,7 +139,7 @@ InpHTFTimeframe=15||15||0||49153||N
 InpHTFEMAPeriod=50||50||1||500||N
 InpHTFEMAToleranceMult=0.2||0.2||0.020000||2.000000||N
 InpEMADistanceMult=0.15||0.15||0.015000||1.500000||N
-; === Diagnostics (off for production) ===
+; === Diagnostics (off for wire test) ===
 InpDiagnosticsEnabled=false||false||0||true||N
 InpDiagnosticsCSV=false||false||0||true||N
 InpDiagnosticsFilePrefix=AAG_diag_production

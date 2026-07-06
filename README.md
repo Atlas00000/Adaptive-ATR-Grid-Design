@@ -3,13 +3,14 @@
 MetaTrader 5 Expert Advisor — EURUSD M5 mean-reversion grid with ATR-adaptive spacing.
 
 **Production preset:** `Presets/AAG_EURUSD_M5_production.set` (LOCK-202)  
-**EA version:** 1.08
+**EA version:** 1.09
 
 ## Documentation
 
 | Doc | Description |
 |---|---|
-| [**compo-report.md**](compo-report.md) | Full composition report — what we built, tested, and learned |
+| [**ai_enhance.md**](ai_enhance.md) | Phase E8 — AI supervisor programme (offline-first) |
+| [**compo-report.md**](compo-report.md) | Full composition report — build & test history |
 | [**system-profile.md**](system-profile.md) | System, edge, and trade profile + live metrics |
 | [**Edge Discovery.md**](Edge%20Discovery.md) | Complete discovery and enhancement test log |
 | [**concept.md**](concept.md) | Strategy thesis |

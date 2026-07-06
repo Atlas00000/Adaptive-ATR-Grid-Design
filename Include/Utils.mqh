@@ -151,6 +151,42 @@ input double InpStructLiqSweepMinATR        = 0.05;
 input bool   InpStructRangeMidAnchorEnabled = false;
 input int    InpStructRangeMidSource        = 0;
 
+//--- Inputs: AI supervisor (Phase E8)
+input group "=== AI Supervisor (E8) ==="
+input bool   InpAIEnabled                 = false;
+input string InpAIModelVersion            = "";
+input bool   InpAIUseOnnx                 = false;  // AI-808: load ONNX from Files/AI/ (else embedded LR)
+input bool   InpAIOnnxFallbackEmbedded    = true;   // AI-808: if ONNX missing, use embedded constants
+input bool   InpAIMemoryEnabled           = false;
+input bool   InpAIEntryContextEnabled     = false;
+input bool   InpAIBasketHealthEnabled     = false;
+input bool   InpAIHealthFlattenOnly       = false;  // match offline sim — no add-block / tighten / trim
+input int    InpAIHealthCheckSec          = 60;     // throttle — match sim checkpoint (not every tick)
+input double InpAIHealthFlattenFloatUSD   = -18.0;  // stress-flatten min float (with score)
+input bool   InpAIHealthHardCapEnabled    = true;   // hard tail cap — no health score required
+input double InpAIHealthHardCapUSD        = -25.0;  // multi-leg cap (open>=2, age>=120s)
+input bool   InpAIHealthHardCapL1Enabled  = true;   // single-leg cap — catches SL tails
+input double InpAIHealthHardCapL1USD      = -28.0;  // below ~30 pip SL (was -35, never fired)
+input int    InpAIHealthHardCapL1MinSec   = 30;     // min basket age before L1 cap
+input bool   InpAIHealthBasketCapEnabled  = true;   // total basket PnL cap (realized+float)
+input double InpAIHealthBasketCapUSD      = -32.0;  // flatten when basket total below this
+input int    InpAIHealthBasketCapMinLegs  = 1;      // 1 = includes post-partial-SL window
+input bool   InpAIHealthSLCascadeEnabled  = true;   // surgical cascade on partial leg SL
+input int    InpAIHealthSLCascadeMinLegs  = 2;    // only when basket had 2+ legs
+input bool   InpAIHealthSLCascadeAnyPartial = false; // flatten on ANY partial SL (805o — too aggressive)
+input double InpAIHealthSLCascadeLossUSD  = -9.0;   // leg deal PnL threshold (805l tail fix)
+input double InpAIHealthSLCascadeStackUSD = -28.0;  // deal+float projected stack guard
+input double InpAIHealthSLCascadeFloatUSD = -8.0;   // legacy float-only trigger
+input bool   InpAIHealthSLCascadeUseFloat = false;  // float-only trigger off by default
+input bool   InpAIRegimeEnabled           = false;
+input double InpAIEntryBlockFloor         = 0.12;
+input double InpAIHealthNoAddThreshold    = 55.0;
+input double InpAIHealthFlattenThreshold  = 88.0;
+input double InpAIRegimeTrendSkipProb     = 0.62;  // LR wire max ~0.69 — 0.85 never fired
+input bool   InpAIRegimeLogScore          = true;   // log P(bad) at arm when >= 0.45
+input double InpAILotMultMin              = 0.65;
+input double InpAILotMultMax              = 1.00;
+
 //--- Inputs: General
 input group "=== General ==="
 input ulong  InpMagicNumber              = 20260705;

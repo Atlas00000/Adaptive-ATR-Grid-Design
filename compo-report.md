@@ -7,10 +7,11 @@
 | **Project** | AAG (Adaptive ATR Grid) |
 | **Platform** | MetaTrader 5 |
 | **Instrument** | EURUSD M5 |
-| **EA version** | 1.08 |
-| **Report date** | 2026-07-05 |
+| **EA version** | 1.32 (production LOCK-202 · AI LOCK-AI) |
+| **Report date** | 2026-07-06 |
 | **Repository** | [Adaptive-ATR-Grid-Design](https://github.com/Atlas00000/Adaptive-ATR-Grid-Design) |
 | **Production preset** | `Presets/AAG_EURUSD_M5_production.set` (LOCK-202) |
+| **AI stack preset** | `Presets/AAG_EURUSD_M5_AI-803_memory-805p.set` (LOCK-AI) |
 
 ---
 
@@ -23,9 +24,10 @@ We set out to build an automated **mean-reversion grid** EA that adapts spacing 
 - A modular MQL5 execution engine (**11 include modules**, state machine, basket recovery)
 - A disciplined **edge-discovery pipeline** (E0–E2) that turned a −$180 / PF 0.67 baseline into a **+$623 / PF 1.46** production stack over 19 months
 - **Four enhancement layers** (E3 regime, E4 grid/risk, E5 exits, E6 structure) — all coded, preset-tested, and **rejected** vs production
-- **40+ Strategy Tester presets**, diagnostics CSV tooling, and full documentation trail
+- **Phase E8 AI supervisor** (LOCK-AI) — 803 memory + 805p basket health; tail capped **−$27.40** on 2025+ wire window; **804/806/807 deferred**
+- **40+ Strategy Tester presets**, ML offline pipeline (`ML/`), diagnostics CSV tooling, and full documentation trail
 
-**Bottom line:** The edge is **real but narrow** — 15–17 server time, RSI rotation, full 6-level grid. Stable in favourable regimes; **not live-ready** on full history until E7 walk-forward validation. Production stack unchanged.
+**Bottom line:** The edge is **real but narrow** — 15–17 server time, RSI rotation, full 6-level grid. **LOCK-202** remains max-net / low-DD reference (PF 1.46, 23% DD over 19 mo). **LOCK-AI** is the canonical **demo / forward-test** stack — cuts tail on 2025+ but PF decays on pre-2025 history (1.12, tail −$64). **Not live-ready** on full history until E7 walk-forward validation.
 
 ---
 
@@ -47,7 +49,7 @@ Phase 1 scope ([`roadmap.md`](roadmap.md)) was execution-only: indicators, grid 
 
 ```text
 AAG/
-├── AAG.mq5                 Expert advisor orchestrator (v1.08)
+├── AAG.mq5                 Expert advisor orchestrator (v1.32)
 ├── AAG.mqproj              MetaEditor project file
 ├── Include/
 │   ├── Utils.mqh           All inputs, enums, structs, helpers
@@ -56,18 +58,31 @@ AAG/
 │   ├── SignalEngine.mqh    EMA slope + ADX gate + E2 entry filters
 │   ├── GridEngine.mqh      Anchor, level prices, add triggers
 │   ├── StateMachine.mqh    Basket lifecycle states
-│   ├── BasketManager.mqh   Basket TP, E5 exits, E4 MAE, recovery
+│   ├── BasketManager.mqh   Basket TP, E5 exits, E4 MAE, SL cascade, recovery
 │   ├── RiskManager.mqh     Session, spread, cooldown, sizing, E4 caps
 │   ├── TradeManager.mqh    CTrade execution, SL/TP, retry
 │   ├── RegimeGate.mqh      Phase E3 regime gates
 │   ├── StructureGate.mqh   Phase E6 structure filters
-│   └── Diagnostics.mqh     CSV trade journal (E0)
-├── Presets/                40+ .set files (production + test matrix)
+│   ├── Diagnostics.mqh     CSV trade journal (E0)
+│   ├── AISupervisor.mqh    E8 AI supervisor (803/804/805/806 policy)
+│   ├── AIModelRuntime.mqh  E8 model load, version gate, ONNX path
+│   ├── AIModelBundle.mqh   E8 bundle manifest (LOCK-AI tags)
+│   ├── AIHealthModel.mqh   Exported LR weights (805)
+│   ├── AIEntryContextModel.mqh  Exported LR weights (804, off)
+│   └── AIRegimeModel.mqh   Exported LR weights (806, off)
+├── ML/                     E8 offline pipeline (Python)
+│   ├── scripts/            build, train, simulate, export
+│   ├── models/             registry.json, joblib, optional ONNX
+│   ├── export/             Strategy Tester diagnostics CSV
+│   └── features/           parquet feature tables
+├── Presets/                40+ .set files (production + AI + test matrix)
 ├── Docs/
 │   └── E0-run-guide.md     Diagnostics run guide
 ├── concept.md              Strategy thesis
 ├── roadmap.md              Phase 1 implementation roadmap
 ├── Edge Discovery.md       Full discovery + enhancement log
+├── ai_enhance.md           Phase E8 AI programme + results log
+├── edgeopt.md              Edge optimisation notes
 ├── system-profile.md       Consolidated system / edge / trade profile
 └── compo-report.md         This document
 ```
@@ -76,15 +91,18 @@ AAG/
 
 ```
 OnTick
-  ├─ ProcessTradeManagement()     every tick — basket TP, E5/E4 exits, sync
-  ├─ ProcessGridLevels()          every tick — add L1–L5 when price hits level
+  ├─ ProcessTradeManagement()     every tick — basket TP, E5/E4 exits, AI health caps, sync
+  ├─ ProcessGridLevels()          every tick — add L1–L5; AI lot/depth/health gates
   └─ ProcessSignals()             new closed bar only
        ├─ SignalEngine.Evaluate()     EMA + ADX + RSI filter
        ├─ RegimeGate.AllowNewBasket() E3 (off in production)
        ├─ StructureGate.AllowNewBasket() E6 (off in production)
+       ├─ AISupervisor.AllowNewBasket() E8 memory + optional 804/806 (LOCK-AI: 803+805)
        ├─ RiskManager gates
        └─ TradeManager.OpenFirstLevel()
 ```
+
+**E8 AI path (when `InpAIEnabled=true`):** `AISupervisor` scores entry at bar close, health at 60s checkpoints + tick hard caps; embedded LR by default; optional ONNX via `Files/AI/*.onnx`; version mismatch → **LOCK-202 fallback**.
 
 **State machine:** `IDLE → ARMED → GRID_ACTIVE → MANAGING → EXITING → COOLDOWN`
 
@@ -107,6 +125,9 @@ OnTick
 | v1.06 | E4 | Basket DD cap, MAE exit, adaptive depth, scaled lots |
 | v1.07 | E3 | Regime gates (ATR pause, ADX slope, seasonal, chop, combo) |
 | v1.08 | E6 | Structure gates (PD H/L, session H/L, liq sweep, range-mid anchor) |
+| v1.09–v1.27 | E8 | AI-800 stub → AI-803 memory → AI-805 health iterations |
+| v1.28–v1.31 | E8 | AI-804 entry context, AI-806 regime (deferred wire) |
+| **v1.32** | **E8** | **AI-808 runtime** — `AIModelRuntime`, bundle manifest, ONNX infra |
 
 ---
 
@@ -220,11 +241,11 @@ All enhancements inherit LOCK-202 and change **one layer**. Tested on Jan–Jul 
 
 ---
 
-## 6. Production performance
+## 6. Production performance (LOCK-202)
 
 *Preset: `AAG_EURUSD_M5_production.set` · $200 deposit · variable spread · **equity DD only***
 
-### 6.1 Multi-horizon summary
+### 6.1 Multi-horizon summary — LOCK-202
 
 | Window | Net | PF | WR | Trades | Equity DD | Avg win / loss |
 |---|---|---|---|---|---|---|
@@ -232,13 +253,25 @@ All enhancements inherit LOCK-202 and change **one layer**. Tested on Jan–Jul 
 | **Jan 2025 – Jul 2026** | **+$623** | **1.46** | **66%** | **324** | **23.0%** | +$9.30 / −$12.42 |
 | **Longest available** | −$192 | 0.95 | 56% | 581 | **98%** | +$10.88 / −$14.76 |
 
-### 6.2 Trade profile
+### 6.2 AI stack performance (LOCK-AI) — v1.32, $200
+
+*Preset: `AAG_EURUSD_M5_AI-803_memory-805p.set` · 803 memory + 805p health · see [`ai_enhance.md`](ai_enhance.md) §9.8*
+
+| Window | Net | PF | WR | Trades | Eq DD | Largest loss | Verdict |
+|---|---|---|---|---|---|---|---|
+| **Jan–Jul 2025** | +$246 | **1.94** | 65% | 99 | **13%** | ~−$12 | Short sweet spot |
+| **Jan 2025 – Jul 2026** | +$409 | **1.33** | 56% | 334 | 74% | **−$27.40** ✓ | **Wire window OK** |
+| **From Jan 2022** | +$508 | **1.12** | 52% | 978 | 64% | **−$64.10** ✗ | Pre-2025 tail fail |
+
+**Trade-off vs LOCK-202 (19 mo):** LOCK-AI sacrifices ~34% net (+$409 vs +$623) and higher DD (74% vs 23%) for **tail cut** (−$27 vs −$63). On 2022+ history, tail cap **breaks** — stack tuned on 2025+ regimes.
+
+### 6.3 Trade profile
 
 **Winners:** rotation within ATR band, 1–2 grid levels, 15–17 session, shorts ~80% of volume (WR 67–74%), MFE correlation **0.86**, avg hold ~1h 45m.
 
 **Losers:** deep grid stack into trend, inverted R:R (avg loss > avg win), fat tails on longest test (largest loss **−$66**), short WR collapse 72% → 55%, max 6 consecutive losses.
 
-### 6.3 Stability assessment
+### 6.4 Stability assessment
 
 | Horizon | Assessment |
 |---|---|
@@ -254,7 +287,8 @@ See [`system-profile.md`](system-profile.md) for full system, edge, and risk pro
 
 | Category | Count | Examples |
 |---|---|---|
-| **Production** | 1 | `AAG_EURUSD_M5_production.set` |
+| **Production** | 1 | `AAG_EURUSD_M5_production.set` (LOCK-202) |
+| **AI stack** | 3+ | `AI-803_memory-805p.set` (**LOCK-AI**), `AI-805_basket-health.set`, `AI-804_lock-ai.set` |
 | **Discovery E0–E2** | ~15 | EDGE-000, EDGE-001, EDGE-104-402, EDGE-202 |
 | **Enhancement E3** | 6 | EDGE-301–306 |
 | **Enhancement E4** | 5 | EDGE-401–405 |
@@ -274,6 +308,8 @@ Presets live in `Presets/`; copies for Strategy Tester in `MQL5/Profiles/Tester/
 | [`Edge Discovery.md`](Edge Discovery.md) | Complete test log, metrics, verdicts |
 | [`system-profile.md`](system-profile.md) | Consolidated live system reference |
 | [`compo-report.md`](compo-report.md) | This composition report |
+| [`ai_enhance.md`](ai_enhance.md) | Phase E8 AI programme, wire log, LOCK-AI metrics |
+| [`edgeopt.md`](edgeopt.md) | Edge optimisation notes |
 | [`Docs/E0-run-guide.md`](Docs/E0-run-guide.md) | Diagnostics CSV guide |
 | [`Presets/README.md`](Presets/README.md) | Preset index and test order |
 
@@ -289,29 +325,50 @@ Presets live in `Presets/`; copies for Strategy Tester in `MQL5/Profiles/Tester/
 6. **Enhancement discipline pays off** — 20+ variants tested systematically; none beat production, avoiding regression.
 7. **Regime stationarity is limited** — PF decays 1.93 → 1.46 → 0.95 as sample lengthens.
 8. **Over-filtering is the recurring failure mode** — E3, E6, and strict E2 filters all die by trade starvation.
+9. **AI tail guard works on 2025+** — 805p SL cascade caps largest loss at −$27.40; pre-2025 regimes still produce −$64 baskets.
+10. **Exit / entry AI layers deferred** — 804, 806, 807 failed offline or MT5 gates; memory + health only in LOCK-AI.
 
 ---
 
-## 10. What remains — Phase E7
+## 10. Phase E8 — AI supervisor (summary)
+
+| Layer | ID | Status | Role |
+|---|---|---|---|
+| Infrastructure | AI-800/808 | **Shipped** v1.32 | Runtime, bundle, embedded LR, optional ONNX |
+| Performance memory | AI-803 | **Wired** | Lot throttle after bad rolling PF |
+| Basket health | AI-805p | **Wired** | SL cascade, hard cap, stress flatten — tail −$27 |
+| Entry context | AI-804 | **Deferred** | Tail fail on long window |
+| Regime skip | AI-806 | **Deferred** | LR never fires at 0.85; net worse at 0.62 |
+| Exit policy | AI-807 | **Research** | Early TP clips winners — defer |
+| Offline sim | AI-810 | **Shipped** | Causal basket replay in `ML/scripts/` |
+
+**Canonical AI preset:** `AAG_EURUSD_M5_AI-803_memory-805p.set` (**LOCK-AI**). Full detail: [`ai_enhance.md`](ai_enhance.md).
+
+---
+
+## 11. What remains — Phase E7 + E8 follow-up
 
 | Task | ID | Gate |
 |---|---|---|
 | Walk-forward (3m train / 1m test) | EDGE-702 | ≥ 3/4 windows pass |
 | Monte Carlo trade shuffle | EDGE-703 | DD tail risk |
 | Longest-window stress | — | PF ≥ **1.1** |
-| Live gate | — | 19-mo equity DD < **25%** |
+| LOCK-AI ext22 tail | — | Largest loss < **−$35** |
+| AI retrain (809) | — | Cover 2022–2024 regimes |
 
-**Production stack is locked.** No further enhancement coding until E7 defines whether the edge survives out-of-sample.
+**Production stack LOCK-202 locked.** **AI stack LOCK-AI locked** for 2025+ forward test. No live until E7 gates pass.
 
 ---
 
-## 11. How to use this repository
+## 12. How to use this repository
 
 ### Compile & run
 
 1. Open `AAG.mqproj` in MetaEditor
-2. Compile **AAG.mq5** (target: v1.08, 0 errors)
-3. Strategy Tester → load `AAG_EURUSD_M5_production.set` from `Profiles/Tester/`
+2. Compile **AAG.mq5** (target: v1.32, 0 errors)
+3. Strategy Tester → load preset from `Profiles/Tester/`:
+   - **Production:** `AAG_EURUSD_M5_production.set` (LOCK-202)
+   - **AI forward test:** `AAG_EURUSD_M5_AI-803_memory-805p.set` (LOCK-AI)
 4. EURUSD M5, variable spread, $200 deposit
 
 ### Enhance (if resuming)
@@ -326,17 +383,19 @@ Live deployment **not approved** until E7 gates pass. Paper trade production pre
 
 ---
 
-## 12. Composition scorecard
+## 13. Composition scorecard
 
 | Area | Status |
 |---|---|
-| Execution engine | **Complete** (v1.08) |
+| Execution engine | **Complete** (v1.32) |
 | Edge discovery | **Complete** (LOCK-202) |
 | Enhancement matrix | **Complete** (E3–E6, all rejected) |
+| AI supervisor (E8) | **LOCK-AI wired** (803+805p); 804/806/807 deferred |
+| ML offline pipeline | **Complete** (AI-801–810, 807 research) |
 | Documentation | **Complete** |
 | Validation (E7) | **Pending** |
 | Live readiness | **Not met** |
 
 ---
 
-*AAG — Adaptive ATR Grid Design · Built and validated July 2026*
+*AAG — Adaptive ATR Grid Design · Built and validated July 2026 · LOCK-202 production · LOCK-AI forward test*

@@ -46,6 +46,8 @@ See `Edge Discovery.md` for full history. Key presets:
 | **E4** grid tail | **403 → 405 → 402 → 404** coded in v1.06 | Presets ready |
 | **E3** regime | **306 → 302 → 301 → 303 → 304 → 305** coded in v1.07 | **Complete — all rejected** |
 | **E6** structure | **602 → 601 → 603 → 604** coded in v1.08 | **Complete — all rejected** |
+| **E8** AI supervisor | **AI-800** infra v1.09 | **Complete — stub** |
+| **E8** AI data | **AI-801** diagnostics export | **Next** |
 | **E7** validation | Walk-forward on production | Tester / external |
 
 Preset naming: copy **production**, change one input group, unique `InpDiagnosticsFilePrefix`.
@@ -110,3 +112,27 @@ Load from Strategy Tester → Inputs → **Load**. Compare vs **production** on 
 | `AAG_EURUSD_M5_EDGE-604_range-mid.set` | Grid anchor at **session range midpoint** (levels radiate from mid) |
 
 **Test order:** 602 → 601 → 603 → 604 vs `production`. Gates (601–603) apply to **new baskets only**; 604 shifts grid anchor only.
+
+### Phase E8 — AI supervisor (EA v1.27+)
+
+**Source:** `MQL5\Experts\AAG\Presets\` · **Tester load path:** `MQL5\Profiles\Tester\`  
+After editing presets in `Presets/`, copy to `Profiles/Tester/` (or run full sync of `AAG*.set`).
+
+| Preset | Role |
+|--------|------|
+| **`AAG_EURUSD_M5_production.set`** | **Production LOCK-202** — live chart + max-net reference |
+| **`AAG_EURUSD_M5_AI-803_memory-805p.set`** | **AI stack LOCK-AI** — demo / forward test |
+| `AAG_EURUSD_M5_AI-804_lock-ai.set` | **P4 active** — LOCK-AI + entry context (wire test) |
+| `AAG_EURUSD_M5_AI-805_basket-health.set` | LOCK-805p — health building block inside LOCK-AI |
+| `AAG_EURUSD_M5_AI-806_diagnostics-prod.set` | Regime labelling — production + CSV (`AAG_diag_AI806_prod_*`) |
+| `AAG_EURUSD_M5_AI-806_diagnostics-805.set` | Regime labelling — 805p + CSV (`AAG_diag_AI806_805p_*`) |
+| `AAG_EURUSD_M5_AI-806_regime.set` | **Archived** — 805p base, `InpAIRegimeEnabled=false` (806 deferred) |
+| `AAG_EURUSD_M5_AI-801_diagnostics.set` | Generic diagnostics (production base) |
+| `AAG_EURUSD_M5_AI-801_w01-jan25jul.set` | Window w01 export |
+| `AAG_EURUSD_M5_AI-801_w02-ext19mo.set` | Window w02 export |
+| `AAG_EURUSD_M5_AI-801_w03-longest.set` | Window w03 / longest export |
+| `AAG_EURUSD_M5_AI-803_memory.set` | AI-803 on LOCK-202 only (wire FAIL — archive) |
+| `AAG_EURUSD_M5_AI-800_stub.set` | AI infra stub |
+| `AAG_EURUSD_M5_EDGE-001_diagnostics.set` | E0 trade journal (legacy prefix) |
+
+See [`ai_enhance.md`](../ai_enhance.md) §9.1 (LOCK-805p), §9.4 (LOCK-AI), §9.2 (806 deferred).

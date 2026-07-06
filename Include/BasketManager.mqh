@@ -24,6 +24,9 @@ private:
    datetime          m_basket_start;
    double            m_trail_peak;
    bool              m_trail_armed;
+   bool              m_cascade_pending;
+   int               m_cascade_legs_before;
+   datetime          m_cascade_trigger_time;
    CLogger          *m_log;
    CDiagnostics     *m_diag;
    CTrade            m_trade;
@@ -54,8 +57,154 @@ private:
       GlobalVariableDel(GVKey("_start"));
      }
 
+   double            GetRecentCloseProfit() const
+     {
+      if(!HistorySelect(TimeCurrent() - 120, TimeCurrent()))
+         return 0.0;
+
+      for(int i = HistoryDealsTotal() - 1; i >= 0; i--)
+        {
+         const ulong deal = HistoryDealGetTicket(i);
+         if(deal == 0)
+            continue;
+         if(HistoryDealGetString(deal, DEAL_SYMBOL) != m_symbol)
+            continue;
+         if(HistoryDealGetInteger(deal, DEAL_MAGIC) != (long)m_magic)
+            continue;
+         if(HistoryDealGetInteger(deal, DEAL_ENTRY) != DEAL_ENTRY_OUT &&
+            HistoryDealGetInteger(deal, DEAL_ENTRY) != DEAL_ENTRY_OUT_BY)
+            continue;
+
+         return HistoryDealGetDouble(deal, DEAL_PROFIT) +
+                HistoryDealGetDouble(deal, DEAL_SWAP) +
+                HistoryDealGetDouble(deal, DEAL_COMMISSION);
+        }
+      return 0.0;
+     }
+
+   double            CalcOpenFloatingPL() const
+     {
+      double pl = 0.0;
+      for(int i = 0; i < ArraySize(m_tickets); i++)
+        {
+         if(!PositionSelectByTicket(m_tickets[i]))
+            continue;
+         if(PositionGetString(POSITION_SYMBOL) != m_symbol)
+            continue;
+         if(PositionGetInteger(POSITION_MAGIC) != m_magic)
+            continue;
+         pl += PositionGetDouble(POSITION_PROFIT) +
+               PositionGetDouble(POSITION_SWAP);
+        }
+      return pl;
+     }
+
+   double            CalcFloatingFromOpenTickets() const
+     {
+      double pl = 0.0;
+      for(int i = 0; i < ArraySize(m_tickets); i++)
+        {
+         if(!PositionSelectByTicket(m_tickets[i]))
+            continue;
+         if(PositionGetString(POSITION_SYMBOL) != m_symbol)
+            continue;
+         if(PositionGetInteger(POSITION_MAGIC) != (long)m_magic)
+            continue;
+         pl += PositionGetDouble(POSITION_PROFIT) +
+               PositionGetDouble(POSITION_SWAP);
+        }
+      return pl;
+     }
+
+   int               CountRemainingOpenLegs() const
+     {
+      int n = 0;
+      for(int i = 0; i < ArraySize(m_tickets); i++)
+        {
+         if(!PositionSelectByTicket(m_tickets[i]))
+            continue;
+         if(PositionGetString(POSITION_SYMBOL) != m_symbol)
+            continue;
+         if(PositionGetInteger(POSITION_MAGIC) != (long)m_magic)
+            continue;
+         n++;
+        }
+      return n;
+     }
+
+   bool              ShouldSLCascadeFromDeal(const double deal_profit,
+                                             const double floating,
+                                             const int legs_before_close,
+                                             const int open_after) const
+     {
+      if(!InpAIHealthSLCascadeEnabled || !InpAIEnabled || !InpAIBasketHealthEnabled)
+         return false;
+      if(legs_before_close < InpAIHealthSLCascadeMinLegs)
+         return false;
+      if(open_after <= 0 || open_after >= legs_before_close)
+         return false;
+      if(deal_profit >= 0.0)
+         return false;
+
+      if(InpAIHealthSLCascadeAnyPartial)
+         return true;
+
+      if(deal_profit <= InpAIHealthSLCascadeLossUSD)
+         return true;
+      if(InpAIHealthSLCascadeStackUSD < 0.0 &&
+         (deal_profit + floating) < InpAIHealthSLCascadeStackUSD)
+         return true;
+      if(InpAIHealthSLCascadeUseFloat && floating < InpAIHealthSLCascadeFloatUSD)
+         return true;
+      return false;
+     }
+
+   bool              TryExecuteSLCascade(CStateMachine &state,
+                                         const double deal_profit,
+                                         const int legs_before,
+                                         const int open_after,
+                                         const double floating)
+     {
+      if(!ShouldSLCascadeFromDeal(deal_profit, floating, legs_before, open_after))
+         return false;
+
+      if(m_log != NULL)
+         m_log.LogBasket("SL cascade deal_pl=" + DoubleToString(deal_profit, 2) +
+                         " float=" + DoubleToString(floating, 2) +
+                         " legs=" + IntegerToString(legs_before) + "->" +
+                         IntegerToString(open_after));
+
+      CloseBasket(state, "ai_health_sl_cascade");
+      ScanPositions();
+      return true;
+     }
+
+   bool              TryBasketCapClose(CStateMachine &state, const int open_count,
+                                       const double deal_pl_addon = 0.0)
+     {
+      if(!InpAIEnabled || !InpAIBasketHealthEnabled || !InpAIHealthBasketCapEnabled)
+         return false;
+      if(open_count < InpAIHealthBasketCapMinLegs)
+         return false;
+
+      const double total = SumBasketRealizedPnL() + deal_pl_addon +
+                           CalcFloatingFromOpenTickets();
+      if(total >= InpAIHealthBasketCapUSD)
+         return false;
+
+      if(m_log != NULL)
+         m_log.LogBasket("Basket cap total=" + DoubleToString(total, 2) +
+                         " deal=" + DoubleToString(deal_pl_addon, 2) +
+                         " open=" + IntegerToString(open_count));
+
+      CloseBasket(state, "ai_health_basket_cap");
+      ScanPositions();
+      return true;
+     }
+
    void              ScanPositions()
      {
+      const int prev_count = ArraySize(m_tickets);
       ArrayResize(m_tickets, 0);
       ArrayResize(m_filled_levels, 0);
 
@@ -76,6 +225,15 @@ private:
          const int lvl_size = ArraySize(m_filled_levels);
          ArrayResize(m_filled_levels, lvl_size + 1);
          m_filled_levels[lvl_size] = (level >= 0) ? level : size;
+        }
+
+      const int new_count = ArraySize(m_tickets);
+      if(prev_count >= InpAIHealthSLCascadeMinLegs &&
+         new_count > 0 && new_count < prev_count)
+        {
+         m_cascade_pending = true;
+         m_cascade_legs_before = prev_count;
+         m_cascade_trigger_time = TimeCurrent();
         }
      }
 
@@ -113,17 +271,35 @@ private:
       return (atr / tick_size) * tick_value * volume;
      }
 
-   bool              CloseBasket(CStateMachine &state, const string reason)
+   double            SumBasketRealizedPnL() const
      {
-      if(m_log != NULL)
-         m_log.LogBasket("Exit triggered: " + reason);
+      if(m_basket_start <= 0)
+         return 0.0;
 
-      if(m_diag != NULL)
-         m_diag.OnBasketClosePending(reason);
+      if(!HistorySelect(m_basket_start, TimeCurrent()))
+         return 0.0;
 
-      state.SetExiting();
-      CloseAll();
-      return true;
+      double pl = 0.0;
+      const int deals = HistoryDealsTotal();
+      for(int i = 0; i < deals; i++)
+        {
+         const ulong deal = HistoryDealGetTicket(i);
+         if(deal == 0)
+            continue;
+         if(HistoryDealGetString(deal, DEAL_SYMBOL) != m_symbol)
+            continue;
+         if(HistoryDealGetInteger(deal, DEAL_MAGIC) != (long)m_magic)
+            continue;
+
+         const long entry = HistoryDealGetInteger(deal, DEAL_ENTRY);
+         if(entry != DEAL_ENTRY_OUT && entry != DEAL_ENTRY_OUT_BY)
+            continue;
+
+         pl += HistoryDealGetDouble(deal, DEAL_PROFIT) +
+               HistoryDealGetDouble(deal, DEAL_SWAP) +
+               HistoryDealGetDouble(deal, DEAL_COMMISSION);
+        }
+      return pl;
      }
 
 public:
@@ -136,6 +312,9 @@ public:
                      m_basket_start(0),
                      m_trail_peak(0.0),
                      m_trail_armed(false),
+                     m_cascade_pending(false),
+                     m_cascade_legs_before(0),
+                     m_cascade_trigger_time(0),
                      m_log(NULL),
                      m_diag(NULL)
      {}
@@ -153,6 +332,106 @@ public:
       return true;
      }
 
+   bool              CloseBasket(CStateMachine &state, const string reason)
+     {
+      if(m_log != NULL)
+         m_log.LogBasket("Exit triggered: " + reason);
+
+      if(m_diag != NULL)
+         m_diag.OnBasketClosePending(reason);
+
+      state.SetExiting();
+      CloseAll();
+      return true;
+     }
+
+   void              OnTradeTransaction(const MqlTradeTransaction &trans,
+                                        CStateMachine &state)
+     {
+      if(trans.type != TRADE_TRANSACTION_DEAL_ADD)
+         return;
+      if(state.GetState() == GRID_STATE_EXITING)
+         return;
+      if(!state.IsBasketActive())
+         return;
+
+      const ulong deal = trans.deal;
+      if(deal == 0)
+         return;
+      if(!HistoryDealSelect(deal))
+         return;
+      if(HistoryDealGetString(deal, DEAL_SYMBOL) != m_symbol)
+         return;
+      if(HistoryDealGetInteger(deal, DEAL_MAGIC) != (long)m_magic)
+         return;
+
+      const long entry = HistoryDealGetInteger(deal, DEAL_ENTRY);
+      if(entry != DEAL_ENTRY_OUT && entry != DEAL_ENTRY_OUT_BY)
+         return;
+
+      const int legs_before = ArraySize(m_tickets);
+      const double deal_pl = HistoryDealGetDouble(deal, DEAL_PROFIT) +
+                             HistoryDealGetDouble(deal, DEAL_SWAP) +
+                             HistoryDealGetDouble(deal, DEAL_COMMISSION);
+      const int open_after = CountRemainingOpenLegs();
+      if(open_after <= 0 || open_after >= legs_before)
+        {
+         ScanPositions();
+         return;
+        }
+
+      if(TryBasketCapClose(state, open_after, deal_pl))
+        {
+         m_cascade_pending = false;
+         return;
+        }
+
+      if(legs_before >= InpAIHealthSLCascadeMinLegs)
+        {
+         const double floating = CalcFloatingFromOpenTickets();
+         if(TryExecuteSLCascade(state, deal_pl, legs_before, open_after, floating))
+           {
+            m_cascade_pending = false;
+            return;
+           }
+        }
+
+      ScanPositions();
+     }
+
+   bool              ProcessPendingSLCascade(CStateMachine &state)
+     {
+      if(!m_cascade_pending)
+         return false;
+      if(state.GetState() == GRID_STATE_EXITING)
+        {
+         m_cascade_pending = false;
+         return false;
+        }
+      if(!state.IsBasketActive())
+        {
+         m_cascade_pending = false;
+         return false;
+        }
+
+      const int open_after = ArraySize(m_tickets);
+      if(open_after <= 0)
+        {
+         m_cascade_pending = false;
+         return false;
+        }
+
+      const double deal_pl = GetRecentCloseProfit();
+      if(deal_pl == 0.0 && (TimeCurrent() - m_cascade_trigger_time) < 2)
+         return false;
+
+      const int legs_before = (m_cascade_legs_before > 0) ?
+                              m_cascade_legs_before : (open_after + 1);
+      const double floating = CalcFloatingFromOpenTickets();
+      m_cascade_pending = false;
+      return TryExecuteSLCascade(state, deal_pl, legs_before, open_after, floating);
+     }
+
    void              Reset()
      {
       ArrayResize(m_tickets, 0);
@@ -162,6 +441,9 @@ public:
       m_bias = BIAS_NONE;
       m_basket_start = 0;
       ResetTrail();
+      m_cascade_pending = false;
+      m_cascade_legs_before = 0;
+      m_cascade_trigger_time = 0;
       ClearPersistence();
      }
 
@@ -219,6 +501,7 @@ public:
    double            GetAnchor() const { return m_anchor; }
    double            GetFrozenDistance() const { return m_frozen_distance; }
    ENUM_TRADE_BIAS   GetBias() const { return m_bias; }
+   datetime          GetBasketStart() const { return m_basket_start; }
 
    double            GetFloatingPL()
      {
@@ -229,6 +512,11 @@ public:
             pl += m_position.Profit() + m_position.Swap() + m_position.Commission();
         }
       return pl;
+     }
+
+   double            GetTotalBasketPnL()
+     {
+      return SumBasketRealizedPnL() + CalcFloatingFromOpenTickets();
      }
 
    bool              HasOpenPositions()
@@ -449,10 +737,47 @@ public:
       ScanPositions();
      }
 
-   void              OnBasketClosed(CStateMachine &state, const int cooldown_minutes)
+   double            OnBasketClosed(CStateMachine &state, const int cooldown_minutes)
      {
+      const double basket_pnl = SumBasketRealizedPnL();
       Reset();
       state.StartCooldown(cooldown_minutes);
+      return basket_pnl;
+     }
+
+   bool              CloseBestProfitableLeg(const double min_profit)
+     {
+      ScanPositions();
+      ulong best_ticket = 0;
+      double best_pl = min_profit;
+
+      for(int i = 0; i < ArraySize(m_tickets); i++)
+        {
+         if(!m_position.SelectByTicket(m_tickets[i]))
+            continue;
+         const double pl = m_position.Profit() + m_position.Swap() + m_position.Commission();
+         if(pl >= best_pl)
+           {
+            best_pl = pl;
+            best_ticket = m_tickets[i];
+           }
+        }
+
+      if(best_ticket == 0)
+         return false;
+
+      if(!m_trade.PositionClose(best_ticket))
+        {
+         if(m_log != NULL)
+            m_log.LogError("AI-805 trim failed ticket=" + IntegerToString(best_ticket));
+         return false;
+        }
+
+      if(m_log != NULL)
+         m_log.LogBasket("AI-805 trimmed best leg ticket=" + IntegerToString(best_ticket) +
+                         " pl=" + DoubleToString(best_pl, 2));
+      ScanPositions();
+      return true;
      }
 
    bool              Recover(CStateMachine &state, CGridEngine &grid,
@@ -551,15 +876,19 @@ public:
       return true;
      }
 
-   void              SyncAfterExternalClose(CStateMachine &state, const int cooldown_minutes)
+   bool              SyncAfterExternalClose(CStateMachine &state, const int cooldown_minutes,
+                                            double &out_basket_pnl)
      {
+      out_basket_pnl = 0.0;
       ScanPositions();
       if(ArraySize(m_tickets) == 0 && state.IsBasketActive())
         {
          if(m_log != NULL)
             m_log.LogBasket("All positions closed externally");
-         OnBasketClosed(state, cooldown_minutes);
+         out_basket_pnl = OnBasketClosed(state, cooldown_minutes);
+         return true;
         }
+      return false;
      }
   };
 

@@ -1,19 +1,27 @@
 # AAG System Profile
 
-*Adaptive ATR Grid — EURUSD M5 — production stack LOCK-202*
+*Adaptive ATR Grid — EURUSD M5 — LOCK-202 production · LOCK-AI forward test*
 
-**Last updated:** 2026-07-05  
-**EA version:** 1.08  
-**Canonical preset:** `AAG_EURUSD_M5_production.set` (= `EDGE-LOCK-202_15-17-rsi`)  
-**Status:** Discovery + enhancement **complete**; production **stable** in favourable regime; **not live-ready** on full history without E7 validation.
+**Last updated:** 2026-07-06  
+**EA version:** 1.32  
+**Production preset:** `AAG_EURUSD_M5_production.set` (LOCK-202)  
+**AI stack preset:** `AAG_EURUSD_M5_AI-803_memory-805p.set` (LOCK-AI)  
+**Status:** Discovery + E3–E6 **complete**; E8 AI **LOCK-AI locked** for 2025+ forward test; **not live-ready** on full history without E7 validation.
 
 ---
 
 ## Executive summary
 
-AAG is a **mean-reversion grid EA** that exploits short-term rotational price action during the US–London overlap, gated by low trend strength (ADX) and mild EMA structure. The locked production stack trades **only hours 15–17** server time with an **RSI rotation filter**, using **ATR-adaptive grid spacing** and **per-leg SL/TP** (not basket-driven exits).
+AAG is a **mean-reversion grid EA** that exploits short-term rotational price action during the US–London overlap (15–17), gated by low trend strength (ADX) and mild EMA structure plus **RSI rotation**.
 
-The system is **profitable and stable** over Jan 2025 – Jul 2026 (PF 1.46, equity DD 23%) but **degrades on the longest available history** (PF 0.95, equity DD 98%). Enhancement phases E3–E6 tested 20+ variants; **none beat production**. The edge is real, narrow, and **regime-dependent** — not a universal grid.
+**Two stacks:**
+
+| Stack | Preset | Role | 19-mo PF | Eq DD | Tail |
+|---|---|---|---|---|---|
+| **LOCK-202** | `production.set` | Max net, low DD reference | **1.46** | **23%** | −$63 |
+| **LOCK-AI** | `AI-803_memory-805p.set` | Demo / forward test | **1.33** | 74% | **−$27** ✓ |
+
+LOCK-202 is **profitable and stable** over Jan 2025 – Jul 2026. LOCK-AI **cuts tail** on the same wire window but trades net for safety (higher DD, lower PF). Extending LOCK-AI to **Jan 2022+** drops PF to **1.12** and breaks tail (−$64). Enhancement phases E3–E6 tested 20+ variants; **none beat production**. AI layers 804/806/807 are **deferred**.
 
 ---
 
@@ -30,7 +38,7 @@ The system is **profitable and stable** over Jan 2025 – Jul 2026 (PF 1.46, equ
 | Direction | One basket at a time (all buy or all sell) |
 | Magic | `20260705` |
 
-### 1.2 Architecture (v1.08)
+### 1.2 Architecture (v1.32)
 
 ```
 AAG.mq5
@@ -38,16 +46,30 @@ AAG.mq5
 ├── ATREngine.mqh         ATR(14), EMA(50), ADX(14); frozen grid distance on basket open
 ├── SignalEngine.mqh      EMA slope + ADX gate + E2 RSI filter
 ├── GridEngine.mqh        Anchor, level prices, add triggers
-├── BasketManager.mqh     Basket TP, E5 exits, E4 MAE exit, recovery
+├── BasketManager.mqh     Basket TP, E5 exits, E4 MAE, SL cascade, recovery
 ├── RiskManager.mqh       Session, spread, cooldown, sizing, E4 depth/lot caps
 ├── TradeManager.mqh      CTrade execution, SL/TP attach, retry
-├── RegimeGate.mqh        E3 gates (off in production)
-├── StructureGate.mqh     E6 structure filters (off in production)
-├── Diagnostics.mqh       Optional CSV journal (off in production)
+├── RegimeGate.mqh        E3 gates (off in production / LOCK-AI)
+├── StructureGate.mqh     E6 structure filters (off)
+├── Diagnostics.mqh       Optional CSV journal
+├── AISupervisor.mqh      E8 — memory, health, entry, regime policy
+├── AIModelRuntime.mqh    E8 — version gate, ONNX load, LOCK-202 fallback
+├── AIModelBundle.mqh     E8 — LOCK-AI / 20260706_808 bundle tags
+├── AIHealthModel.mqh     Embedded LR (805)
+├── AIEntryContextModel.mqh  Embedded LR (804, off in LOCK-AI)
+├── AIRegimeModel.mqh     Embedded LR (806, off in LOCK-AI)
 └── Utils.mqh             All inputs and types
 ```
 
-**Tick flow:** trade management every tick → grid adds every tick → signals on **new closed bar only**.
+**Tick flow:**
+
+| Path | Frequency | Components |
+|---|---|---|
+| Trade management | Every tick | Basket TP, MAE, **AI health caps**, SL cascade, sync |
+| Grid levels | Every tick | Add L1–L5; **AI lot / depth / no-add** |
+| Signals | **Closed bar only** | Signal → E3/E6 → **AISupervisor** → Risk → Open L0 |
+
+**E8 inference:** Entry/regime at M5 bar close; basket health at **60s checkpoints** + tick-level hard caps (−$25/−$28 float, basket cap −$32, SL cascade).
 
 ### 1.3 Production stack — LOCK-202
 
@@ -56,18 +78,29 @@ AAG.mq5
 | **Session (E1)** | Hours **15–17** | Overlap core; do not widen |
 | **Entry (E2)** | RSI rotation — buy ≤48, sell ≥45 | Winner over BB, HTF EMA, EMA distance |
 | **Signal base** | EMA(50) slope/flat + ADX(14) < 20 | Rotation, not trend |
-| **Grid** | Max **6** levels, spacing = ATR × **1.5** | Full depth validated; max1 rejected |
+| **Grid** | Max **6** levels, spacing = ATR × **1.5** | Full depth validated |
 | **Sizing** | Fixed **0.10** lot | |
 | **SL / TP** | **2.0×ATR** / **1.5×ATR** per leg | WR-driven; avg loss > avg win |
-| **Basket TP** | **$50** money target | **Never fires** in practice; per-leg closes first |
+| **Basket TP** | **$50** money target | **Never fires**; per-leg closes first |
 | **Cooldown** | **20** min after basket close | |
 | **Spread cap** | **2.0** pips | |
-| **E3 regime** | All **off** | Tested; no promotion |
-| **E4 grid/risk** | All **off** | Tested; no promotion |
-| **E5 exits** | All **off** | Tested; no promotion |
-| **E6 structure** | All **off** | Tested; no promotion |
+| **E3–E6** | All **off** | Tested; no promotion |
+| **E8 AI** | **`InpAIEnabled=false`** | Pure LOCK-202 |
 
-### 1.4 State machine
+### 1.4 AI stack — LOCK-AI (v1.32)
+
+| Layer | Setting | Notes |
+|---|---|---|
+| **Base** | Same as LOCK-202 | Signal engine unchanged |
+| **AI-803 memory** | `InpAIMemoryEnabled=true` | Lot ×0.80 after bad rolling PF; recovery ramp |
+| **AI-805p health** | `InpAIBasketHealthEnabled=true` | `flatten_only`; SL cascade −$9 / stack −$28 |
+| **Hard cap** | L1 −$28 / L2 −$25 float | Tick + checkpoint |
+| **804 entry** | **off** | Deferred — tail fail long window |
+| **806 regime** | **off** | Deferred — no MT5 benefit |
+| **808 runtime** | Embedded LR default | `InpAIModelVersion=20260706_808` |
+| **ONNX** | `InpAIUseOnnx=false` | Optional `Files/AI/*.onnx` |
+
+### 1.5 State machine
 
 | State | Behaviour |
 |---|---|
@@ -86,217 +119,148 @@ Restart recovery rebuilds open basket from positions (magic + symbol).
 
 ### 2.1 Hypothesis
 
-The edge lives in **quiet rotational microstructure**: moderate ATR, flat or mildly sloped EMA, ADX below threshold, two-way auction during the **15–17 overlap**. Profit comes from **high win rate** on shallow grid legs, not favourable R:R.
+The edge lives in **quiet rotational microstructure** during **15–17 overlap**. Profit comes from **high win rate** on shallow grid legs, not favourable R:R. The system **bleeds** in volatility expansion, deep grid stacks, and pre-2025 regimes.
 
-The system **bleeds** during session transitions, volatility expansion, deep grid stacking into trends, and regimes where short-side WR collapses.
-
-### 2.2 Validated pocket (do not re-test)
+### 2.2 Validated pocket
 
 | Dimension | Finding |
 |---|---|
 | **When** | **15–17** server time only |
-| **Entry** | RSI rotation (not extremes ≤35/≥65) |
-| **Grid depth** | 6 levels; conditional max1 rejected |
-| **Direction** | Short-heavy (~80% volume); longs minority but profitable with RSI |
+| **Entry** | RSI rotation (≤48 / ≥45) |
+| **Grid depth** | 6 levels |
 | **Exits** | Per-leg SL/TP; basket TP $50 inert |
-| **Filters rejected** | BB, HTF EMA, EMA distance, all E3–E6 enhancements |
+| **AI tail fix** | 805p cascade caps at **−$27.40** on 2025+ only |
 
-### 2.3 Regime map
+### 2.3 Horizon decay — LOCK-202 vs LOCK-AI
 
-| Regime | Performance | Mechanism |
-|---|---|---|
-| **Jan–May** | Strongest | High activity (~35–40 trades/mo), best gross profit |
-| **Jun–Dec** | Weaker | Activity flattens; H2 net softens |
-| **15–17 hours** | All entries | Preset window + bar-close timing → 15–18 cluster |
-| **Expansion / transitions** | Bleed | Hours 9, 16, 18–22 historically toxic (pre-LOCK) |
-| **Long history** | Fails | Fat tails (−$66 largest loss); short WR 72% → 55% |
-
-### 2.4 Horizon decay
-
-| Window | PF | WR | Equity DD | Trades | Net ($200) |
+| Window | LOCK-202 PF | LOCK-202 DD | LOCK-AI PF | LOCK-AI DD | LOCK-AI tail |
 |---|---|---|---|---|---|
-| **Jan–Jul 2025** (7 mo) | **1.93** | **72%** | **12.4%** | **96** | **+$273** |
-| **Jan 2025 – Jul 2026** (19 mo) | **1.46** | **66%** | **23.0%** | **324** | **+$623** |
-| **Longest available** | **0.95** | **56%** | **98%** | **581** | **−$192** |
+| **Jan–Jul 2025** | 1.93 | 12% | **1.94** | **13%** | ~−$12 |
+| **Jan 25 – Jul 26** | **1.46** | **23%** | 1.33 | 74% | **−$27** ✓ |
+| **From Jan 2022** | 0.95 | 98% | 1.12 | 64% | **−$64** ✗ |
 
-Edge is **stationary within favourable regimes** but **not robust** across full history without tail control.
+**Discovery:** PF decay is **WR collapse** (72% → 56% → 52%), not winner clipping. LOCK-AI improves tail on wire window; **pre-2025 history** still produces fat baskets.
 
-### 2.5 Enhancement outcome (E3–E6)
+### 2.4 Enhancement outcome
 
-All tested layers **failed to beat production** on net + equity DD while preserving trade volume:
-
-| Phase | Tests | Outcome |
-|---|---|---|
-| **E5** exits | Trail, MR EMA, adaptive TP, time stop, R:R flip | Rejected (clips winners or kills edge) |
-| **E4** grid/risk | DD cap, MAE exit, adaptive depth, scaled lots | Rejected (blunt caps hurt net) |
-| **E3** regime | ATR pause, ADX slope, seasonal, chop, combo | Rejected (inert or over-filters) |
-| **E6** structure | PD H/L, session H/L, liq sweep, range-mid anchor | Rejected (over-filter or DD blowout) |
-
-**Reserve candidate:** EDGE-501 (R:R flip) — better per-trade economics (+$10.88 / −$8.18) but lower headline PF; not adopted.
+| Phase | Outcome |
+|---|---|
+| **E5–E6** | All rejected vs LOCK-202 |
+| **E8 803+805p** | **LOCK-AI** — tail ✓, net −34% vs prod on 19 mo |
+| **E8 804/806/807** | **Deferred** |
 
 ---
 
 ## 3. Trade profile
 
-### 3.1 Winner profile (LOCK-202)
+### 3.1 Winner profile
 
-| Characteristic | Evidence |
-|---|---|
-| **Rotation within ATR band** | MFE correlation **0.84–0.88** — price moves favourably before TP |
-| **Low trend pressure** | ADX < 20 at entry; EMA flat or mild slope |
-| **Shallow grid** | 1–2 levels filled; TP hit before deep stack |
-| **Session** | Entries cluster **15:00–17:00** |
-| **Weekdays** | Tue / Wed / Fri relatively stronger |
-| **Months** | Jan–May strongest in 19-mo run |
-| **Direction** | Shorts dominate volume with **higher WR** (~67–74%) |
-| **Hold time** | Avg **~1h 45m–1h 50m** (production window) |
+Rotation within ATR band, 1–2 levels, 15–17 session, MFE correlation **0.74–0.86**, avg hold ~1h.
 
-### 3.2 Loser profile (LOCK-202)
+### 3.2 Loser profile
 
-| Characteristic | Evidence |
-|---|---|
-| **Adverse excursion then SL** | MAE correlation **0.79–0.83**; little recovery past ~4 ATR units |
-| **Deep grid stack** | Multiple legs stop out in one directional push |
-| **Inverted R:R** | Avg loss **>** avg win at all horizons |
-| **Fat tails (longest test)** | Largest loss **−$66**; avg loss −$14.76 vs avg win +$10.88 |
-| **Short WR collapse** | 72% (7 mo) → **55%** (longest) — more bad regimes in sample |
-| **Consecutive losses** | Max **6** (−$75.60) on 19-mo; **6** on longest |
-| **Basket TP** | **0** historical basket TP exits — deep baskets die by per-leg SL |
+Deep grid stack, inverted R:R, fat tails on long history. LOCK-202 largest loss **−$66**; LOCK-AI caps at **−$27** on 2025+ wire window.
 
-### 3.3 Direction split (production)
+### 3.3 Direction split (LOCK-202, 19 mo)
 
-| Horizon | Short trades | Short WR | Long trades | Long WR |
-|---|---|---|---|---|
-| Jan–Jul 2025 | ~82 (85%) | **72%** | ~14 (15%) | **71%** |
-| Jan 25 – Jul 26 | ~261 (81%) | **~67%** | ~63 (19%) | **~60%** |
-| Longest | ~520 (90%) | **55%** | ~61 (10%) | **69%** |
-
-Shorts carry volume and edge; longs are fewer but RSI filter made them viable. Extended history erodes **short WR**, not long WR.
-
-### 3.4 Exit anatomy
-
-| Exit type | Role |
-|---|---|
-| **Per-leg TP** (1.5×ATR) | Primary win path |
-| **Per-leg SL** (2.0×ATR) | Primary loss path; larger than TP |
-| **Basket TP** ($50) | Configured but **never reached** before legs close |
-| **E5 coded exits** | Tested; all rejected vs production |
-
-### 3.5 Grid depth
-
-| Depth | Pattern |
-|---|---|
-| **L0–L1** | Majority of winners; fast rotation |
-| **L2–L5** | Tail risk — stacked SLs wipe many small wins |
-| **Max1 (rejected)** | 314 singles at 52% WR — worse than full grid in session |
+Shorts ~81% volume, WR ~67%; longs ~19%, WR ~60%. Extended history erodes **short WR**.
 
 ---
 
 ## 4. Current performance
 
-*Production preset, variable spread, $200 initial deposit. **Equity drawdown only** (balance ignored).*
+*$200 deposit, variable spread, equity DD.*
 
-### 4.1 Headline metrics — three horizons
+### 4.1 LOCK-202 — three horizons
 
-| Metric | Jan–Jul 2025 | Jan 25 – Jul 2026 | Longest test |
+| Metric | Jan–Jul 2025 | Jan 25 – Jul 26 | Longest |
 |---|---|---|---|
-| **Net profit** | +$273 | **+$623** | −$192 |
-| **Profit factor** | **1.93** | **1.46** | 0.95 |
-| **Win rate** | **72%** | **66%** | 56% |
-| **Total trades** | 96 | **324** | 581 |
-| **Equity DD (max)** | **12.4%** | **23.0%** | **98%** |
-| **Avg win / avg loss** | +$8.22 / −$10.90 | +$9.30 / −$12.42 | +$10.88 / −$14.76 |
-| **Largest loss** | ~−$12 | ~−$16 | **−$66** |
-| **Max consec losses** | 3 | 6 | 6 |
-| **Expectancy / trade** | +$2.84 | +$1.92 | −$0.33 |
-| **Avg hold** | ~1h 49m | ~1h 45m | — |
+| **Net** | +$273 | **+$623** | −$192 |
+| **PF** | **1.93** | **1.46** | 0.95 |
+| **WR** | **72%** | **66%** | 56% |
+| **Trades** | 96 | **324** | 581 |
+| **Eq DD** | **12%** | **23%** | 98% |
+| **Largest loss** | ~−$12 | ~−$63 | **−$66** |
 
-### 4.2 Quality ratios (19-month reference)
+### 4.2 LOCK-AI — v1.32 window sweep
 
-| Ratio | Value | Interpretation |
-|---|---|---|
-| **Profit factor** | 1.46 | Gross profit / gross loss — positive |
-| **Recovery factor** | ~3.9 (typical run) | Net / max equity DD — moderate |
-| **Sharpe** | ~7–8 (typical run) | High on favourable windows; misleading on longest |
-| **Corr(profit, MFE)** | **0.86** | Winners capture favorable excursion |
-| **Corr(profit, MAE)** | **0.79–0.83** | Losers show adverse excursion before SL |
+| Metric | Jan–Jul 2025 | Jan 25 – Jul 26 | From Jan 2022 |
+|---|---|---|---|
+| **Net** | +$246 | +$409 | +$508 |
+| **PF** | **1.94** | **1.33** | 1.12 |
+| **WR** | 65% | 56% | 52% |
+| **Trades** | 99 | 334 | 978 |
+| **Eq DD** | 13% | 74% | 64% |
+| **Largest loss** | ~−$12 | **−$27.40** | **−$64.10** |
+| **Avg W / L** | $7.93 / −$7.49 | $8.84 / −$8.34 | $9.24 / −$9.07 |
 
-### 4.3 Monthly rhythm (19-month)
+### 4.3 Stability assessment
 
-| Period | Pattern |
-|---|---|
-| **Jan–May** | Peak activity and net contribution |
-| **Jun–Sep** | Softer; still net-positive in production (seasonal skip rejected) |
-| **Oct–Dec** | Lower activity; mixed months |
-
-### 4.4 Stability assessment
-
-| Aspect | Assessment |
-|---|---|
-| **Short window (7 mo)** | **Strong** — PF 1.93, DD 12% |
-| **Medium window (19 mo)** | **Stable profitable** — PF 1.46, DD 23% |
-| **Full history** | **Unstable** — PF < 1, DD catastrophic |
-| **Parameter sensitivity** | Session + RSI locked; widening filters consistently hurts |
-| **Code maturity** | v1.08; E3/E4/E5/E6 wired but disabled in production |
+| Stack | Short (7 mo) | Wire (19 mo) | Extended |
+|---|---|---|---|
+| **LOCK-202** | Strong | **Stable** | Fails |
+| **LOCK-AI** | Strong | **Profitable, high DD** | Tail breaks |
 
 ---
 
 ## 5. Key metrics dashboard
 
-*Single reference card for LOCK-202 / production.*
-
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│  AAG LOCK-202 — EURUSD M5 — Production                      │
+│  AAG — EURUSD M5 — July 2026                                │
 ├─────────────────────────────────────────────────────────────┤
-│  Session        15–17 server  │  Grid        6 × ATR×1.5    │
-│  Entry          RSI ≤48 / ≥45 │  Lot         0.10 fixed     │
-│  SL / TP        2.0 / 1.5 ATR│  Basket TP   $50 (inactive)  │
+│  PRODUCTION (LOCK-202)          AI STACK (LOCK-AI v1.32)    │
+│  Session 15–17                  803 memory + 805p health    │
+│  RSI ≤48 / ≥45                  Tail −$27 on 2025+ wire     │
 ├─────────────────────────────────────────────────────────────┤
 │  19-MONTH (Jan 25 – Jul 26)                                 │
-│  Net +$623  │  PF 1.46  │  WR 66%  │  Trades 324            │
-│  Equity DD 23%  │  Avg W/L +$9.30 / −$12.42                 │
+│  LOCK-202:  Net +$623 │ PF 1.46 │ DD 23% │ tail −$63       │
+│  LOCK-AI:   Net +$409 │ PF 1.33 │ DD 74% │ tail −$27 ✓     │
 ├─────────────────────────────────────────────────────────────┤
-│  7-MONTH (Jan–Jul 2025)                                     │
-│  Net +$273  │  PF 1.93  │  WR 72%  │  Trades 96             │
-│  Equity DD 12.4%                                            │
+│  SHORT (Jan–Jul 2025)                                       │
+│  LOCK-202:  PF 1.93 │ DD 12%                                │
+│  LOCK-AI:   PF 1.94 │ DD 13%                                │
 ├─────────────────────────────────────────────────────────────┤
-│  LONGEST STRESS                                             │
-│  Net −$192  │  PF 0.95  │  WR 56%  │  Equity DD 98%         │
-│  Largest loss −$66  │  Short WR 55%                           │
+│  EXTENDED (from Jan 2022, $200)                             │
+│  LOCK-AI:   PF 1.12 │ DD 64% │ tail −$64 ✗                  │
 ├─────────────────────────────────────────────────────────────┤
 │  LIVE GATE (not met)                                        │
-│  Longest PF ≥ 1.1  │  19-mo DD < 25%  │  Walk-forward E7    │
+│  E7 walk-forward │ longest PF ≥ 1.1 │ LOCK-AI ext tail    │
 └─────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 6. Risk profile
+## 6. Execution & ML infrastructure
 
-| Risk | Severity | Mitigation status |
+| Component | Path | Role |
 |---|---|---|
-| **Inverted per-leg R:R** | High | E5 tested — no fix adopted |
-| **Deep grid tail** | High | E4 tested — caps hurt net |
-| **Regime decay** | High | E3 tested — filters over-prune |
-| **Short WR collapse** | Medium | Locked session helps; degrades on long history |
-| **Basket TP unreachable** | Medium | Known; all closes per-leg |
-| **Spread / slippage** | Low | 2 pip cap; variable spread in tests |
-| **Single symbol** | Medium | By design Phase 1 |
+| EA orchestrator | `AAG.mq5` v1.32 | OnTick routing |
+| AI supervisor | `Include/AISupervisor.mqh` | Policy: lot, depth, health, skip |
+| Model runtime | `Include/AIModelRuntime.mqh` | Version gate, ONNX, fallback |
+| Offline pipeline | `ML/scripts/` | build, train, simulate, export |
+| Causal replay | `ML/scripts/basket_replay.py` | AI-810 health/exit sim |
+| Model registry | `ML/models/registry.json` | LOCK-AI promoted bundle |
+| Diagnostics | `ML/export/*_trades_*.csv` | Leg-level tester export |
+
+```bash
+cd ML
+python scripts/export_models.py --bundle LOCK-AI
+python scripts/simulate_policy.py --policy memory_805p --window AI806_805p
+```
 
 ---
 
 ## 7. Live readiness
 
-| Gate | Target | Current (19 mo) | Longest |
+| Gate | LOCK-202 (19 mo) | LOCK-AI (wire) | LOCK-AI (ext22) |
 |---|---|---|---|
-| Profit factor | ≥ 1.1 | **1.46** ✓ | **0.95** ✗ |
-| Equity DD | < 25% | **23%** ✓ | **98%** ✗ |
-| Net profit | Positive | **+$623** ✓ | **−$192** ✗ |
-| Walk-forward | ≥ 3/4 windows | **Not run** | — |
-| Enhancement stack | Promoted winner | **None** — LOCK-202 only | |
+| PF ≥ 1.1 | **1.46** ✓ | **1.33** ✓ | 1.12 ✓ |
+| Eq DD < 25% | **23%** ✓ | 74% ✗ | 64% ✗ |
+| Tail < −$35 | ✗ (−$63) | **✓** | ✗ (−$64) |
+| Walk-forward | Not run | — | — |
 
-**Verdict:** Suitable for **continued paper / segmented validation** (E7). **Not approved for live** until longest-window PF ≥ 1.1 and tail losses capped.
+**Verdict:** **LOCK-202** for max-net paper. **LOCK-AI** for 2025+ forward test / tail research. **No live** until E7.
 
 ---
 
@@ -304,13 +268,14 @@ Shorts carry volume and edge; longs are fewer but RSI filter made them viable. E
 
 | File | Purpose |
 |---|---|
-| `AAG.mq5` | Expert advisor (v1.08) |
-| `Presets/AAG_EURUSD_M5_production.set` | Canonical production inputs |
-| `Edge Discovery.md` | Full test log and enhancement history |
-| `concept.md` | Original strategy thesis |
-| `roadmap.md` | Phase 1 implementation roadmap |
-| `Presets/README.md` | Preset index and test order |
+| `AAG.mq5` | Expert advisor (v1.32) |
+| `Presets/AAG_EURUSD_M5_production.set` | LOCK-202 production |
+| `Presets/AAG_EURUSD_M5_AI-803_memory-805p.set` | LOCK-AI canonical |
+| `ai_enhance.md` | E8 programme, wire log, metrics |
+| `compo-report.md` | Composition report |
+| `Edge Discovery.md` | E0–E6 test log |
+| `ML/README.md` | Offline pipeline guide |
 
 ---
 
-*This document is the consolidated system profile. Update after E7 walk-forward or any production stack change.*
+*Update after E7 walk-forward or production stack change.*

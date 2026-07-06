@@ -113,6 +113,26 @@
       "path":"Include\\StructureGate.mqh",
       "compile":false,
       "relative_to_project":true
+    },
+    {
+      "path":"Include\\AISupervisor.mqh",
+      "compile":false,
+      "relative_to_project":true
+    },
+    {
+      "path":"Include\\AIHealthModel.mqh",
+      "compile":false,
+      "relative_to_project":true
+    },
+    {
+      "path":"Include\\AIRegimeModel.mqh",
+      "compile":false,
+      "relative_to_project":true
+    },
+    {
+      "path":"Include\\AIEntryContextModel.mqh",
+      "compile":false,
+      "relative_to_project":true
     }
   ]
 }

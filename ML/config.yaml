@@ -1,0 +1,146 @@
+# AAG E8 ML pipeline configuration
+
+baseline:
+  preset: AAG_EURUSD_M5_production.set
+  symbol: EURUSD
+  timeframe: M5
+  production_trades_19mo: 324
+  production_pf_19mo: 1.46
+  production_dd_equity_19mo: 23.0
+
+paths:
+  export_dir: export
+  features_dir: features
+  models_dir: models
+
+windows:
+  discovery: ["2025-01-01", "2025-07-31"]
+  extended: ["2025-01-01", "2026-07-31"]
+  longest: null  # fill with full available range
+
+walk_forward:
+  train_months: 3
+  test_months: 1
+
+# Anti-overfilter thresholds (match Utils.mqh / ai_enhance.md)
+thresholds:
+  entry_block_floor: 0.12
+  entry_block_confidence_min: 0.90
+  health_no_add: 55
+  health_flatten: 88
+  regime_trend_skip_prob: 0.62  # LR wire model — max ~0.69 on train; 0.85 never fires
+  lot_mult_min: 0.65
+  lot_mult_max: 1.00
+  volume_floor_pct: 0.85
+
+promotion_gates:
+  min_trades_pct: 0.85
+  net_vs_production_pct: -0.05
+  dd_improve_pts: 3
+  longest_pf_floor: 0.95
+
+# AI-810 event replay (simulate_policy --policy health)
+health_sim:
+  mode: flatten_only   # flatten_only | full — matches EA v1.15 wire
+  checkpoint_sec: 60
+  flatten_float_usd: -18.0
+  stress_flatten_at: 75.0
+  hard_cap_enabled: true
+  hard_cap_usd: -25.0
+  hard_cap_l1_enabled: true
+  hard_cap_l1_usd: -28.0
+  hard_cap_l1_min_sec: 30
+
+# AI-805p wired stack (simulate_policy --policy regime_805p)
+health_805p:
+  mode: flatten_only
+  checkpoint_sec: 60
+  flatten_float_usd: -18.0
+  stress_flatten_at: 75.0
+  hard_cap_enabled: true
+  hard_cap_usd: -25.0
+  hard_cap_l1_enabled: true
+  hard_cap_l1_usd: -28.0
+  hard_cap_l1_min_sec: 30
+  basket_cap_enabled: true
+  basket_cap_usd: -32.0
+  basket_cap_min_legs: 1
+  sl_cascade_enabled: true
+  sl_cascade_min_legs: 2
+  sl_cascade_any_partial: false
+  sl_cascade_loss_usd: -9.0
+  sl_cascade_stack_usd: -28.0
+  sl_cascade_use_float: false
+  sl_cascade_float_usd: -8.0
+
+# AI-806 offline promotion gates (vs 805p replay baseline)
+regime_gates:
+  min_trades_pct: 0.80
+  net_vs_805p_pct: 0.0
+  longest_pf_floor: 1.05
+  tail_loss_usd: -35.0
+  max_skip_rate: 0.15
+
+# AI-804 offline promotion gates (vs LOCK-AI / memory_805p)
+entry_gates:
+  min_trades_pct: 0.85
+  net_vs_lock_ai_pct: -0.05
+  dd_improve_pts: 2.0
+
+features_entry:
+  - rsi
+  - adx
+  - atr
+  - atr_pct_100
+  - ema_slope
+  - spread_pips
+  - hour
+  - weekday
+  - month
+  - rolling_wr_10
+  - rolling_wr_20
+  - rolling_pf_20
+
+features_health:
+  - grid_depth
+  - floating_pl
+  - seconds_open
+  - atr_delta
+  - adx_delta
+  - dist_anchor_atr
+  - mfe_so_far
+  - mae_so_far
+
+labels:
+  basket_won: "basket_pnl > 0"
+  tail_loss: "basket_pnl < -20 or basket_pnl < -2 * avg_win"
+
+# AI-807 exit / expectancy research (offline only — no EA wire)
+exit_policy:
+  partial_l0_1r:
+    enabled: true
+    health_threshold: 40.0
+    partial_fraction: 0.50
+    min_one_r_usd: 6.0
+  dynamic_tp:
+    enabled: true
+    base_tp_atr: 1.5
+    edge_tp_scale: 0.5
+    weak_edge_cutoff: 0.50
+    early_capture_r: 0.90
+  runner_lock:
+    enabled: true
+    activate_float_usd: 10.0
+    lock_float_usd: 8.0
+
+expectancy_gates:
+  min_trades_pct: 0.85
+  net_vs_lock_ai_pct: -0.05
+  tail_loss_usd: -35.0
+  avg_win_improve_pct: 0.05
+  avg_loss_improve_pct: 0.05
+
+models:
+  entry_context: entry_context_v0
+  basket_health: basket_health_v0
+  regime: regime_v0

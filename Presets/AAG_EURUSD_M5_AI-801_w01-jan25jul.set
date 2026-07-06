@@ -1,10 +1,6 @@
-; AAG_EURUSD_M5_production
-; PRODUCTION — winning stack (= EDGE-LOCK-202 v2)
-; Session 15–17 + RSI rotation | SL 2×ATR / TP 1.5×ATR | grid 6 | basket TP $50
-; Jan–Jul 2025: +$273 | PF 1.93 | WR 72% | DD 12% | 96 trades
-; Jan 25–Jul 26: +$623 | PF 1.46 | WR 66% | DD 23%
-; Use for live chart + backtest validation. Enhancement tests copy this, change one layer.
-; EA v1.09+ | EURUSD M5
+; AAG_EURUSD_M5_AI-801_w01-jan25jul
+; E8 AI-801 — Window 1: 2025.01.01 – 2025.07.31 (discovery, ~96 trades)
+; LOCK-202 + diagnostics | prefix w01
 ;
 ; === Indicators ===
 InpATRPeriod=14||14||1||140||N
@@ -97,7 +93,7 @@ InpAILotMultMin=0.65||0.65||0.065000||6.500000||N
 InpAILotMultMax=1.0||1.0||0.100000||10.000000||N
 ; === General ===
 InpMagicNumber=20260705||20260705||1||202607050||N
-InpTesterVerbose=false||false||0||true||N
+InpTesterVerbose=true||false||0||true||N
 ; === Session / Time (E1) ===
 InpTimeFilterEnabled=true||false||0||true||N
 InpTradeHourStart=15||15||0||23||N
@@ -124,6 +120,6 @@ InpHTFEMAPeriod=50||50||1||500||N
 InpHTFEMAToleranceMult=0.2||0.2||0.020000||2.000000||N
 InpEMADistanceMult=0.15||0.15||0.015000||1.500000||N
 ; === Diagnostics (off for production) ===
-InpDiagnosticsEnabled=false||false||0||true||N
-InpDiagnosticsCSV=false||false||0||true||N
-InpDiagnosticsFilePrefix=AAG_diag_production
+InpDiagnosticsEnabled=true||false||0||true||N
+InpDiagnosticsCSV=true||false||0||true||N
+InpDiagnosticsFilePrefix=AAG_diag_AI801_w01_jan25jul

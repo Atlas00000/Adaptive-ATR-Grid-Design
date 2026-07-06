@@ -1,4 +1,4 @@
-﻿# AAG Edge Enhancement
+# AAG Edge Enhancement
 
 *EURUSD M5 — post-discovery optimisation on the locked stack.*
 
@@ -1158,4 +1158,4 @@ E5 exits (basket TP, trailing)     ← avg loss > avg win; fat tails on longest 
 
 **Enhancement status (E3–E6):** **All enhancement phases complete — no promotion.** Production **LOCK-202** remains locked with E3/E4/E5/E6 **off**.
 
-**Next action:** **E7** — walk-forward (EDGE-702) and longest-window stress test on `production` baseline. Gate to live: longest PF ≥ 1.1, DD < 25% on 19-mo run.
+**Next action:** **E8 AI** — see [`ai_enhance.md`](ai_enhance.md). Start **AI-800** infra + **AI-801** diagnostics export. **E7** walk-forward runs in parallel on LOCK-202 baseline.

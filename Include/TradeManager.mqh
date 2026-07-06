@@ -73,10 +73,13 @@ private:
                               CATREngine &atr_engine,
                               const double entry_price,
                               double &sl,
-                              double &tp) const
+                              double &tp,
+                              const double tp_atr_mult = -1.0,
+                              const double lot = 0.0) const
      {
+      const double tp_mult = (tp_atr_mult > 0.0) ? tp_atr_mult : InpTPATRMult;
       const double sl_dist = atr_engine.CalcSLDistance(InpSLTPMode, InpSLATRMult, InpSLFixedPips);
-      const double tp_dist = atr_engine.CalcTPDistance(InpSLTPMode, InpTPATRMult, InpTPFixedPips);
+      const double tp_dist = atr_engine.CalcTPDistance(InpSLTPMode, tp_mult, InpTPFixedPips);
 
       if(bias == BIAS_BUY)
         {
@@ -89,9 +92,44 @@ private:
          tp = entry_price - tp_dist;
         }
 
+      if(lot > 0.0)
+         ClampSLToMaxLegLoss(bias, entry_price, lot, sl);
+
       sl = NormalizeDouble(sl, _Digits);
       tp = NormalizeDouble(tp, _Digits);
       return true;
+     }
+
+   void              ClampSLToMaxLegLoss(const ENUM_TRADE_BIAS bias,
+                                         const double entry_price,
+                                         const double lot,
+                                         double &sl) const
+     {
+      if(!InpAIEnabled || !InpAIBasketHealthEnabled ||
+         !InpAIHealthHardCapEnabled || !InpAIHealthHardCapL1Enabled)
+         return;
+
+      const double max_loss = MathAbs(InpAIHealthHardCapL1USD);
+      if(max_loss <= 0.0 || lot <= 0.0 || sl <= 0.0)
+         return;
+
+      const ENUM_ORDER_TYPE otype = (bias == BIAS_BUY) ? ORDER_TYPE_BUY : ORDER_TYPE_SELL;
+      double profit = 0.0;
+      if(!OrderCalcProfit(otype, m_symbol, lot, entry_price, sl, profit))
+         return;
+      if(profit >= -max_loss)
+         return;
+
+      const double dist = MathAbs(entry_price - sl);
+      if(dist <= 0.0)
+         return;
+
+      const double ratio = max_loss / MathAbs(profit);
+      const double new_dist = dist * ratio * 0.98;
+      if(bias == BIAS_BUY)
+         sl = NormalizeDouble(entry_price - new_dist, _Digits);
+      else
+         sl = NormalizeDouble(entry_price + new_dist, _Digits);
      }
 
    bool              SendWithRetry(const ENUM_TRADE_BIAS bias,
@@ -185,7 +223,8 @@ public:
                                     CGridEngine &grid,
                                     CBasketManager &basket,
                                     CStateMachine &state,
-                                    const double grid_anchor = 0.0)
+                                    const double grid_anchor = 0.0,
+                                    const double ai_lot_mult = 1.0)
      {
       string reason = "";
       if(!risk.PreTradeCheck(InpMaxSpreadPips, reason))
@@ -201,13 +240,15 @@ public:
       const double lot = risk.CalcLotSize(atr_engine, InpSizingMode, InpFixedLot,
                                           InpRiskPercent, InpMinLot, InpMaxLot,
                                           InpSLTPMode, InpSLATRMult, InpSLFixedPips, 0);
+      const double adj_lot = AAG_NormalizeLot(m_symbol, lot * ai_lot_mult,
+                                                InpMinLot, InpMaxLot);
 
       const double price = (bias == BIAS_BUY) ?
                            SymbolInfoDouble(m_symbol, SYMBOL_ASK) :
                            SymbolInfoDouble(m_symbol, SYMBOL_BID);
 
       double sl = 0.0, tp = 0.0;
-      CalcSLTP(bias, atr_engine, price, sl, tp);
+      CalcSLTP(bias, atr_engine, price, sl, tp, -1.0, adj_lot);
 
       if(!ValidateStops(bias, price, sl, tp, reason))
         {
@@ -218,7 +259,7 @@ public:
 
       const string comment = grid.LevelComment(0);
       ulong ticket = 0;
-      if(!SendWithRetry(bias, lot, sl, tp, comment, ticket))
+      if(!SendWithRetry(bias, adj_lot, sl, tp, comment, ticket))
          return false;
 
       const double anchor = (grid_anchor > 0.0) ? grid_anchor : price;
@@ -232,7 +273,7 @@ public:
 
       if(m_log != NULL)
          m_log.LogInfo("First level opened " + AAG_BiasToString(bias) +
-                       " lot=" + DoubleToString(lot, 2) +
+                       " lot=" + DoubleToString(adj_lot, 2) +
                        " anchor=" + DoubleToString(anchor, _Digits));
       return true;
      }
@@ -243,7 +284,9 @@ public:
                                    CRiskManager &risk,
                                    CGridEngine &grid,
                                    CBasketManager &basket,
-                                   CStateMachine &state)
+                                   CStateMachine &state,
+                                   const double ai_lot_mult = 1.0,
+                                   const double ai_tp_atr_mult = -1.0)
      {
       string reason = "";
       const int max_levels = risk.GetEffectiveMaxLevels(atr_engine, InpMaxGridLevels);
@@ -266,13 +309,15 @@ public:
                                           InpRiskPercent, InpMinLot, InpMaxLot,
                                           InpSLTPMode, InpSLATRMult, InpSLFixedPips,
                                           level_index);
+      const double adj_lot = AAG_NormalizeLot(m_symbol, lot * ai_lot_mult,
+                                                InpMinLot, InpMaxLot);
 
       const double price = (bias == BIAS_BUY) ?
                            SymbolInfoDouble(m_symbol, SYMBOL_ASK) :
                            SymbolInfoDouble(m_symbol, SYMBOL_BID);
 
       double sl = 0.0, tp = 0.0;
-      CalcSLTP(bias, atr_engine, price, sl, tp);
+      CalcSLTP(bias, atr_engine, price, sl, tp, ai_tp_atr_mult, adj_lot);
 
       if(!ValidateStops(bias, price, sl, tp, reason))
         {
@@ -283,7 +328,7 @@ public:
 
       const string comment = grid.LevelComment(level_index);
       ulong ticket = 0;
-      if(!SendWithRetry(bias, lot, sl, tp, comment, ticket))
+      if(!SendWithRetry(bias, adj_lot, sl, tp, comment, ticket))
          return false;
 
       basket.AddTicket(ticket, level_index, state.GetState());
@@ -297,7 +342,7 @@ public:
 
       if(m_log != NULL)
          m_log.LogInfo("Grid level " + IntegerToString(level_index) +
-                       " opened lot=" + DoubleToString(lot, 2));
+                       " opened lot=" + DoubleToString(adj_lot, 2));
 
       if(basket.GetOpenCount() >= max_levels)
          state.SetManaging();

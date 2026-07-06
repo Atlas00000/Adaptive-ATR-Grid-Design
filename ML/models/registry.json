@@ -1,0 +1,18 @@
+{
+  "bundle": "LOCK-AI",
+  "runtime_version": "20260706_808",
+  "models": [
+    {
+      "id": "basket_health_v0",
+      "version": "AI-805_v0",
+      "path": "models/basket_health_v0.joblib",
+      "mql": "Include/AIHealthModel.mqh",
+      "type": "health",
+      "exported": true,
+      "onnx": null,
+      "status": "embedded_lr"
+    }
+  ],
+  "promoted": "LOCK-AI",
+  "updated": "2026-07-06"
+}

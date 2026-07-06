@@ -4,7 +4,7 @@
 //+------------------------------------------------------------------+
 #property copyright "Copyright 2026, AAG"
 #property link      "https://www.mql5.com"
-#property version   "1.08"
+#property version   "1.32"
 #property strict
 
 #include "Include/Utils.mqh"
@@ -19,6 +19,7 @@
 #include "Include/TradeManager.mqh"
 #include "Include/RegimeGate.mqh"
 #include "Include/StructureGate.mqh"
+#include "Include/AISupervisor.mqh"
 
 //--- Module instances
 CLogger         g_logger;
@@ -33,6 +34,7 @@ CBasketManager  g_basket;
 CTradeManager   g_trade;
 CRegimeGate     g_regime;
 CStructureGate  g_structure;
+CAISupervisor   g_ai;
 
 //+------------------------------------------------------------------+
 //| Expert initialization function                                   |
@@ -40,7 +42,7 @@ CStructureGate  g_structure;
 int OnInit()
   {
    g_logger.Init("AAG", InpTesterVerbose);
-   g_logger.LogInfo("Init v1.08 symbol=" + _Symbol + " tf=" + EnumToString(_Period));
+   g_logger.LogInfo("Init v1.32 symbol=" + _Symbol + " tf=" + EnumToString(_Period));
 
    g_diag.SetLogger(g_logger);
    g_diag.Init(_Symbol, InpMagicNumber, InpDiagnosticsEnabled,
@@ -54,6 +56,9 @@ int OnInit()
 
    g_structure.SetLogger(g_logger);
    g_structure.Init(_Symbol, _Period);
+
+   g_ai.SetLogger(g_logger);
+   g_ai.Init(_Symbol, _Period);
 
    g_atr.SetLogger(g_logger);
    if(!g_atr.Init(_Symbol, _Period, InpATRPeriod, InpEMAPeriod, InpADXPeriod))
@@ -112,6 +117,12 @@ int OnInit()
    if(g_structure.IsActive())
       g_logger.LogInfo("Structure filters E6 active");
 
+   if(g_ai.IsActive())
+      g_logger.LogInfo("AI supervisor E8 active — version=" + InpAIModelVersion +
+                       " runtime=" + g_ai.RuntimeMode());
+   else if(InpAIEnabled)
+      g_logger.LogInfo("AI master on — runtime fallback LOCK-202 (" + g_ai.RuntimeMode() + ")");
+
    return INIT_SUCCEEDED;
   }
 
@@ -120,6 +131,7 @@ int OnInit()
 //+------------------------------------------------------------------+
 void OnDeinit(const int reason)
   {
+   g_ai.Shutdown();
    g_diag.Flush();
    g_signal.Deinit();
    g_atr.Deinit();
@@ -134,6 +146,60 @@ void OnTradeTransaction(const MqlTradeTransaction &trans,
                         const MqlTradeResult &result)
   {
    g_diag.OnTradeTransaction(trans);
+   g_basket.OnTradeTransaction(trans, g_state);
+  }
+
+//+------------------------------------------------------------------+
+//| AI-805 basket health — flatten / trim / block adds               |
+//+------------------------------------------------------------------+
+void ProcessBasketHealth()
+  {
+   if(!g_state.IsBasketActive() || g_state.GetState() == GRID_STATE_EXITING)
+      return;
+   if(!InpAIEnabled || !InpAIBasketHealthEnabled)
+      return;
+
+   const int open_count = g_basket.GetOpenCount();
+   if(open_count <= 0)
+      return;
+
+   const int seconds_open = (int)(TimeCurrent() - g_basket.GetBasketStart());
+   const double floating = g_basket.GetFloatingPL();
+   const double total_pnl = g_basket.GetTotalBasketPnL();
+
+   // Basket total cap — every tick (realized + floating, catches stacked leg SLs)
+   string cap_reason = "";
+   if(g_ai.ShouldBasketCapFlatten(open_count, total_pnl, cap_reason))
+     {
+      g_basket.CloseBasket(g_state, cap_reason);
+      return;
+     }
+
+   // Hard tail cap — every tick (must not wait for 60s health throttle)
+   if(g_ai.ShouldHardCapFlatten(open_count, floating, seconds_open, cap_reason))
+     {
+      g_basket.CloseBasket(g_state, cap_reason);
+      return;
+     }
+
+   if(!g_ai.ShouldRunHealthCheck())
+      return;
+   AIPolicy hp = g_ai.EvaluateBasket(floating, open_count, seconds_open,
+                                     g_basket.GetAnchor(), g_basket.GetBias(), g_atr);
+
+   if(hp.flatten_basket)
+     {
+      g_basket.CloseBasket(g_state, hp.reason);
+      return;
+     }
+
+   if(g_ai.ShouldTrimBestLeg(hp.health_score, open_count) && floating > AI_HEALTH_TRIM_PROFIT)
+     {
+      if(g_basket.CloseBestProfitableLeg(AI_HEALTH_TRIM_PROFIT))
+         g_ai.MarkHealthTrimDone();
+     }
+
+   g_ai.MarkHealthCheckDone();
   }
 
 //+------------------------------------------------------------------+
@@ -152,8 +218,10 @@ void ProcessGridLevels()
    int filled[];
    g_basket.GetFilledLevels(filled);
    const int open_count = g_basket.GetOpenCount();
-   const int max_levels = MathMin(g_risk.GetEffectiveMaxLevels(g_atr, InpMaxGridLevels),
-                                  InpMaxOpenTrades);
+
+   AIPolicy ai_policy = g_ai.EvaluateEntry(bias, g_atr);
+   const int base_max = g_risk.GetEffectiveMaxLevels(g_atr, InpMaxGridLevels);
+   const int max_levels = MathMin(base_max, MathMin(InpMaxOpenTrades, ai_policy.max_levels));
    const int next_level = g_grid.GetNextLevelIndex(open_count);
 
    if(open_count >= max_levels)
@@ -165,6 +233,20 @@ void ProcessGridLevels()
    if(!g_grid.IsPriceAtLevel(bias, next_level, filled))
       return;
 
+   const int seconds_open = (int)(TimeCurrent() - g_basket.GetBasketStart());
+   AIPolicy hp = g_ai.EvaluateBasket(g_basket.GetFloatingPL(), open_count, seconds_open,
+                                     g_basket.GetAnchor(), bias, g_atr);
+   if(hp.flatten_basket)
+     {
+      g_basket.CloseBasket(g_state, hp.reason);
+      return;
+     }
+   if(!hp.allow_add_level)
+     {
+      g_ai.LogBlock(hp.reason);
+      return;
+     }
+
    string reason = "";
    if(!g_risk.CanAddLevel(open_count, max_levels, InpMaxSpreadPips,
                           g_basket.GetFloatingPL(), reason))
@@ -173,7 +255,8 @@ void ProcessGridLevels()
       return;
      }
 
-   g_trade.OpenGridLevel(bias, next_level, g_atr, g_risk, g_grid, g_basket, g_state);
+   g_trade.OpenGridLevel(bias, next_level, g_atr, g_risk, g_grid, g_basket, g_state,
+                         ai_policy.lot_mult, hp.tp_atr_mult);
   }
 
 //+------------------------------------------------------------------+
@@ -234,11 +317,21 @@ void ProcessSignals()
         {
          g_state.SetArmed(sig.bias);
         }
+
+      AIPolicy ai_policy = g_ai.GetNeutralPolicy();
+      string ai_block = "";
+      if(!g_ai.AllowNewBasket(sig.bias, g_atr, ai_policy, ai_block))
+        {
+         g_ai.LogBlock(ai_block);
+         return;
+        }
+
       g_trade.OpenFirstLevel(sig.bias, g_atr, g_risk, g_grid, g_basket, g_state,
                             g_structure.ResolveGridAnchor(
                                (sig.bias == BIAS_BUY) ?
                                SymbolInfoDouble(_Symbol, SYMBOL_ASK) :
-                               SymbolInfoDouble(_Symbol, SYMBOL_BID)));
+                               SymbolInfoDouble(_Symbol, SYMBOL_BID)),
+                            ai_policy.lot_mult);
      }
   }
 
@@ -253,7 +346,8 @@ void ProcessTradeManagement()
      {
       if(!g_basket.HasOpenPositions())
         {
-         g_basket.OnBasketClosed(g_state, InpCooldownMinutes);
+         const double basket_pnl = g_basket.OnBasketClosed(g_state, InpCooldownMinutes);
+         g_ai.OnBasketClosed(basket_pnl);
          g_atr.ResetFrozenDistance();
          g_grid.Reset();
         }
@@ -264,7 +358,15 @@ void ProcessTradeManagement()
      {
       g_atr.Update();
 
+      g_basket.GetOpenCount();
+      if(g_basket.ProcessPendingSLCascade(g_state))
+         return;
+
       if(g_basket.CheckMAEExit(g_state, g_atr, InpMAEExitEnabled, InpMAEExitATRMult))
+         return;
+
+      ProcessBasketHealth();
+      if(g_state.GetState() == GRID_STATE_EXITING)
          return;
 
       if(g_basket.CheckBasketExits(g_state, g_atr,
@@ -277,14 +379,22 @@ void ProcessTradeManagement()
                                    InpTimeStopEnabled, InpTimeStopMinutes))
          return;
 
-      g_basket.SyncAfterExternalClose(g_state, InpCooldownMinutes);
+      double basket_pnl_ext = 0.0;
+      if(g_basket.SyncAfterExternalClose(g_state, InpCooldownMinutes, basket_pnl_ext))
+        {
+         g_ai.OnBasketClosed(basket_pnl_ext);
+         g_atr.ResetFrozenDistance();
+         g_grid.Reset();
+         return;
+        }
 
       if(g_state.GetState() == GRID_STATE_MANAGING ||
          g_state.GetState() == GRID_STATE_GRID_ACTIVE)
         {
          if(!g_basket.HasOpenPositions())
            {
-            g_basket.OnBasketClosed(g_state, InpCooldownMinutes);
+            const double basket_pnl = g_basket.OnBasketClosed(g_state, InpCooldownMinutes);
+            g_ai.OnBasketClosed(basket_pnl);
             g_atr.ResetFrozenDistance();
             g_grid.Reset();
            }
